@@ -1,0 +1,15 @@
+name,address,group,checks,intervals,alerts
+nas-01,192.168.1.10,Storage,ping|dns|port|http|ssl|trace,,down|recovered
+proxmox,192.168.1.11,Compute,ping|dns|port|http|ssl,,down|recovered
+pihole,192.168.1.12,Network,ping|dns|port|http,http:30,down|warn|recovered
+gateway,192.168.1.1,Network,ping|dns|port|trace,,down|recovered
+home-asst,192.168.1.20,Apps,ping|dns|port|http|ssl|trace,ping:10|port:10,down|warn|recovered
+plex,192.168.1.21,Apps,ping|dns|port|http|ssl,,down|recovered
+grafana,192.168.1.22,Apps,ping|dns|port|http|ssl,,down|recovered
+unifi,192.168.1.2,Network,ping|dns|port|http|ssl,,down|recovered
+printer,192.168.1.40,IoT,ping|dns|port,,down|recovered
+cam-front,192.168.1.41,IoT,ping|dns|port|http,,down|recovered
+docker-01,192.168.1.30,Compute,ping|dns|port|http|ssl,,down|recovered
+backup,192.168.1.32,Storage,ping|dns|port|trace,,down|warn|recovered
+git,192.168.1.33,Apps,ping|dns|port|http|ssl,,down|recovered
+example-blog,example.com,External,ping|dns|port|http|ssl|trace,ping:60|port:60,down|warn|recovered

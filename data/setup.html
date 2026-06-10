@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HostMon setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/pages.css">
+<style>body{display:block;overflow:auto}</style>
+</head>
+<body>
+<div class="setup-stage" id="stage"></div>
+<script src="/js/api.js"></script>
+<script src="/js/ui.js"></script>
+<script>
+/* Captive-portal first-run setup. Served by the device in AP mode. */
+(function(){
+  const {h}=UI;
+  const stage=document.getElementById('stage');
+  let step='welcome', ssid='', pass='', networks=[];
+
+  function bars(n){ const b=h('span',{cls:'bars'}); [6,9,11,13].forEach((ht,i)=>
+    b.appendChild(h('i',{style:{height:ht+'px',opacity:i<n?'1':'.28'}}))); return b; }
+
+  function phone(){
+    const body=h('div',{cls:'cap-body'});
+    if(step==='welcome') welcome(body);
+    else if(step==='wifi') wifi(body);
+    else if(step==='connecting') connecting(body);
+    else if(step==='done') done(body);
+    const dotIdx={welcome:0,wifi:1,connecting:2,done:2,ap:2}[step];
+    body.appendChild(h('div',{cls:'steps-dots'},[0,1,2].map(i=>h('i',{cls:dotIdx===i?'on':''}))));
+    return h('div',{cls:'phone'},h('div',{cls:'phone-screen'},
+      h('div',{cls:'phone-status'},h('span',{},'HostMon setup'),
+        h('span',{cls:'ssid'}, step==='done'?[ssid+' ',bars(4)]:['HostMon ',bars(4)])),
+      h('div',{cls:'cap-bar'},h('span',{cls:'lock'},'🔒'),' 192.168.4.1 · HostMon setup'),
+      body));
+  }
+  function welcome(b){
+    b.appendChild(h('div',{style:{display:'flex',alignItems:'center',gap:'11px',marginBottom:'16px'}},
+      h('div',{cls:'mk',style:{width:'40px',height:'40px',borderRadius:'12px',fontSize:'19px'}},'◆'),
+      h('div',{},h('div',{style:{fontSize:'17px',fontWeight:'600'}},'Host Monitor'),
+        h('div',{cls:'c-mut',style:{fontSize:'12px'}},'hostmon-01 · first-run setup'))));
+    b.appendChild(h('div',{cls:'cap-sub'},'You’re connected to the device’s own network. Choose how it should run — you can change this later in Settings.'));
+    b.appendChild(h('div',{cls:'choice rec',onClick:()=>{step='wifi';scan();render();}},
+      h('div',{cls:'ct'},'① Join my Wi-Fi ',h('span',{cls:'badge'},'recommended')),
+      h('div',{cls:'cdesc'},'Put the monitor on your home network so the dashboard is reachable at monitor.local.')));
+  }
+  function wifi(b){
+    b.appendChild(h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'}},
+      h('button',{cls:'btn sm ghost',onClick:()=>{step='welcome';render();}},'←'),
+      h('div',{cls:'cap-h',style:{margin:'0',fontSize:'18px'}},'Join Wi-Fi')));
+    b.appendChild(h('div',{cls:'lbl',style:{marginBottom:'8px'}},'Networks found'));
+    const list=h('div',{cls:'wifi-list'});
+    if(!networks.length) list.appendChild(h('div',{cls:'wifi'},h('div',{cls:'ssid'},'Scanning…')));
+    networks.forEach(w=> list.appendChild(h('div',{cls:'wifi'+(ssid===w.ssid?' sel':''),onClick:()=>{ssid=w.ssid;render();}},
+      h('div',{cls:'ssid'},w.ssid),h('span',{cls:'meta'},w.lock?'🔒':'open'),bars(w.sig))));
+    b.appendChild(list);
+    const pwI=h('input',{cls:'input mono',type:'text',value:pass,placeholder:'network password',oninput:e=>pass=e.target.value});
+    b.appendChild(h('div',{cls:'field',style:{marginTop:'16px'}},h('label',{},'Password · '+(ssid||'select a network')),pwI));
+    b.appendChild(h('button',{cls:'btn pri',style:{width:'100%',justifyContent:'center'},onClick:join},'Join & reboot →'));
+  }
+  function connecting(b){
+    b.appendChild(h('div',{style:{textAlign:'center',paddingTop:'60px'}},
+      h('div',{cls:'spinner',style:{margin:'0 auto 18px'}}),
+      h('div',{style:{fontSize:'16px',fontWeight:'600'}},'Connecting to '+ssid+'…'),
+      h('div',{cls:'cap-sub',style:{marginTop:'8px'}},'Getting an IP via DHCP and rebooting the monitor. This takes a few seconds.')));
+  }
+  function done(b){
+    b.appendChild(h('div',{style:{textAlign:'center',paddingTop:'34px'}},
+      h('div',{cls:'okcircle'},'✓'),
+      h('div',{style:{fontSize:'19px',fontWeight:'600'}},'You’re all set'),
+      h('div',{cls:'cap-sub',style:{marginTop:'8px'}},'Host Monitor is joining '+ssid+'. Reconnect your phone to your normal Wi-Fi and open the dashboard.'),
+      h('div',{cls:'card',style:{textAlign:'left',padding:'12px 14px',marginBottom:'16px'}},
+        kv('Dashboard','monitor.local'),kv('Network',ssid)),
+      h('a',{cls:'btn pri',style:{width:'100%',justifyContent:'center'},href:'http://monitor.local/'},'Open dashboard')));
+  }
+  function kv(k,v){ return h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:'12.5px',marginTop:'5px'}},
+    h('span',{cls:'c-mut'},k),h('b',{cls:'mono'},v)); }
+
+  async function scan(){ try{ networks=await API.wifiScan(); }catch(e){ networks=[]; } render(); }
+  async function join(){
+    if(!ssid){ alert('Pick a network first'); return; }
+    step='connecting'; render();
+    try{ await API.wifiJoin(ssid,pass); step='done'; }
+    catch(e){ alert(e.message); step='wifi'; }
+    render();
+  }
+
+  function render(){ stage.innerHTML='';
+    stage.appendChild(h('button',{cls:'btn setup-close',onClick:()=>location.href='/'},'✕ Close'));
+    stage.appendChild(h('div',{cls:'lbl',style:{color:'var(--faint)'}},'First-run · captive portal'));
+    stage.appendChild(phone());
+  }
+  render();
+})();
+</script>
+</body>
+</html>

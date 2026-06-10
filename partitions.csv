@@ -1,0 +1,10 @@
+# HostMonitor — custom 8MB flash layout (single app, no OTA)
+# Large 5MB app slot for the full build (LVGL + HTTPS server + ESP Mail Client +
+# Display Panel + mbedTLS). ~2.9MB LittleFS for the web dashboard + cert cache.
+# Total flash: 0x800000 (8 MB). LittleFS mounts the "spiffs"-labeled partition.
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+phy_init,   data, phy,      0xf000,    0x1000,
+factory,    app,  factory,  0x10000,   0x500000,
+spiffs,     data, spiffs,   0x510000,  0x2E0000,
+coredump,   data, coredump, 0x7F0000,  0x10000,

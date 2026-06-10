@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Host Monitor — Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1117; --bg2:#0a0e13; --panel:#151b23; --raise:#1a2230; --soft:#1e2733;
+  --line:#26313f; --hair:#1c2530; --edge:#33404f;
+  --tx:#e8eef6; --mut:#8b99ac; --faint:#5b6779;
+  --teal:#2dd4bf; --teal2:#14b8a6; --blue:#5b9dff;
+  --up:#34d399; --warn:#fbbf24; --down:#f87171; --paused:#a78bfa; --ack:#38bdf8;
+  --shadow:0 10px 34px rgba(0,0,0,.36);
+  --ui:'Space Grotesk',system-ui,sans-serif; --mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:88px}
+body{margin:0;font-family:var(--ui);background:var(--bg2);color:var(--tx);-webkit-font-smoothing:antialiased;line-height:1.6}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(1200px 640px at 84% -10%, #14202c 0%, transparent 55%),
+             radial-gradient(900px 500px at 8% 4%, #11202a 0%, transparent 50%)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+a{color:var(--teal);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:rgba(45,212,191,.28)}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#222c38;border-radius:6px;border:2px solid var(--bg2)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- top bar ---------- */
+header.top{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;
+  padding:13px 28px;border-bottom:1px solid var(--hair);
+  background:rgba(10,14,19,.82);backdrop-filter:blur(14px)}
+.brand{display:flex;align-items:center;gap:11px}
+.brand .mk{width:34px;height:34px;border-radius:10px;background:linear-gradient(150deg,var(--teal),var(--blue));
+  display:flex;align-items:center;justify-content:center;color:#04231b;font-weight:700;font-size:17px;
+  box-shadow:0 4px 14px rgba(45,212,191,.3)}
+.brand .nm{font-size:16px;font-weight:600;line-height:1.05}
+.brand .nm small{display:block;font-size:10px;color:var(--mut);font-weight:400;letter-spacing:.4px;font-family:var(--mono)}
+.top .links{margin-left:auto;display:flex;align-items:center;gap:4px}
+.top .links a{color:var(--mut);font-size:13px;font-weight:500;padding:7px 12px;border-radius:9px;border:1px solid transparent}
+.top .links a:hover{color:var(--tx);background:var(--raise);text-decoration:none}
+.top .ghbtn{font-size:12.5px;font-weight:600;color:var(--tx);background:var(--raise);border:1px solid var(--line);
+  border-radius:9px;padding:7px 13px;display:inline-flex;align-items:center;gap:7px}
+.top .ghbtn:hover{border-color:var(--edge);background:var(--soft);text-decoration:none}
+.menu-btn{display:none}
+
+/* ---------- layout ---------- */
+.wrap{position:relative;z-index:1;max-width:1200px;margin:0 auto;display:grid;
+  grid-template-columns:228px minmax(0,1fr);gap:46px;padding:0 28px}
+nav.toc{position:sticky;top:88px;align-self:start;height:calc(100vh - 88px);overflow-y:auto;
+  padding:30px 0 40px;display:flex;flex-direction:column;gap:2px}
+nav.toc .grp{font-size:9px;letter-spacing:1.6px;color:var(--faint);text-transform:uppercase;margin:16px 12px 7px;font-weight:600}
+nav.toc .grp:first-child{margin-top:0}
+nav.toc a{display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:9px;color:var(--mut);
+  font-size:13px;font-weight:500;border-left:2px solid transparent}
+nav.toc a:hover{color:var(--tx);background:var(--raise);text-decoration:none}
+nav.toc a.on{color:var(--tx);background:linear-gradient(180deg,var(--raise),#161d29);border-left-color:var(--teal)}
+nav.toc a .n{font-family:var(--mono);font-size:10.5px;color:var(--faint);width:16px;flex:none}
+nav.toc a.on .n{color:var(--teal)}
+
+main{padding:30px 0 100px;min-width:0}
+
+/* ---------- hero ---------- */
+.hero{padding:14px 0 8px;border-bottom:1px solid var(--hair);margin-bottom:38px}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:1px;color:var(--teal);text-transform:uppercase;font-weight:600}
+.hero h1{font-size:46px;font-weight:700;letter-spacing:-1px;margin:14px 0 0;line-height:1.04}
+.hero p.lead{font-size:17px;color:var(--mut);max-width:620px;margin:16px 0 24px;line-height:1.55}
+.hero .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:30px}
+.hchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:500;color:var(--mut);
+  background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 13px}
+.hchip .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex:none}
+.herorow{display:grid;grid-template-columns:1fr 360px;gap:28px;align-items:center}
+
+/* device mock */
+.device{background:linear-gradient(160deg,#10161e,#0b1016);border:1px solid var(--edge);border-radius:20px;
+  padding:14px;box-shadow:var(--shadow);position:relative}
+.device::after{content:"";position:absolute;left:50%;top:7px;transform:translateX(-50%);width:34px;height:4px;border-radius:3px;background:#2a3543}
+.device .screen{aspect-ratio:800/480;border-radius:11px;background:
+  radial-gradient(600px 320px at 80% -10%,#14202c 0,transparent 55%),var(--bg2);
+  border:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;margin-top:8px}
+.scr-top{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--hair)}
+.scr-top .d{width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 0 3px rgba(52,211,153,.16)}
+.scr-top b{font-size:11px;font-weight:600}
+.scr-top .t{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--mut)}
+.scr-body{flex:1;display:flex;align-items:center;gap:16px;padding:6px 16px}
+.donut{width:96px;height:96px;border-radius:50%;flex:none;position:relative;
+  background:conic-gradient(var(--up) 0 80%,var(--warn) 80% 88%,var(--down) 88% 95%,var(--paused) 95% 100%)}
+.donut::after{content:"";position:absolute;inset:13px;border-radius:50%;background:#0c1118;display:block}
+.donut .ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1}
+.donut .ctr b{font-size:21px;font-weight:700;line-height:1}
+.donut .ctr span{font-size:8px;color:var(--mut);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+.scr-stats{display:flex;flex-direction:column;gap:6px;flex:1}
+.sstat{display:flex;align-items:center;gap:8px;font-size:11px}
+.sstat .sw{width:8px;height:8px;border-radius:2px;flex:none}
+.sstat .lb{color:var(--mut)}
+.sstat .vv{margin-left:auto;font-family:var(--mono);font-weight:600}
+.scr-nav{display:flex;border-top:1px solid var(--hair)}
+.scr-nav div{flex:1;text-align:center;font-size:9px;color:var(--faint);padding:7px 0;font-weight:500}
+.scr-nav div.on{color:var(--teal)}
+.devtag{text-align:center;font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:11px;letter-spacing:.3px}
+
+/* ---------- sections ---------- */
+section{padding-top:30px;margin-top:6px;scroll-margin-top:88px}
+section > h2{font-size:13px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal);
+  margin:0 0 6px;display:flex;align-items:center;gap:10px}
+section > h2 .num{font-family:var(--mono);color:var(--faint);font-weight:500}
+section .htitle{font-size:27px;font-weight:600;letter-spacing:-.4px;margin:0 0 14px;color:var(--tx)}
+section p{color:var(--mut);max-width:680px;margin:0 0 16px}
+section p strong, li strong{color:var(--tx);font-weight:600}
+section h3{font-size:16px;font-weight:600;margin:30px 0 12px;color:var(--tx)}
+.divider{height:1px;background:var(--hair);margin:46px 0 0}
+
+/* cards & callouts */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.note{display:flex;gap:13px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--blue);
+  border-radius:12px;padding:14px 17px;margin:18px 0;font-size:13.5px;color:var(--mut);max-width:680px}
+.note.warn{border-left-color:var(--warn)}
+.note.teal{border-left-color:var(--teal)}
+.note .ic{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--blue);flex:none;margin-top:1px}
+.note.warn .ic{color:var(--warn)}
+.note.teal .ic{color:var(--teal)}
+.note b{color:var(--tx)}
+
+/* feature grid */
+.fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:6px 0 4px}
+.fcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px 18px;transition:.14s}
+.fcard:hover{border-color:var(--edge);transform:translateY(-1px)}
+.fcard .ic{width:34px;height:34px;border-radius:9px;background:var(--raise);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:var(--teal);font-family:var(--mono);font-weight:700;font-size:14px}
+.fcard h4{margin:0 0 5px;font-size:14.5px;font-weight:600}
+.fcard p{margin:0;font-size:12.5px;color:var(--mut);line-height:1.5}
+
+/* steps */
+ol.steps{list-style:none;counter-reset:s;padding:0;margin:18px 0;max-width:720px}
+ol.steps>li{counter-increment:s;position:relative;padding:0 0 22px 46px;border-left:1px solid var(--hair);margin-left:14px}
+ol.steps>li:last-child{border-left-color:transparent;padding-bottom:0}
+ol.steps>li::before{content:counter(s);position:absolute;left:-14px;top:-3px;width:28px;height:28px;border-radius:9px;
+  background:var(--raise);border:1px solid var(--line);color:var(--teal);font-family:var(--mono);font-weight:700;
+  font-size:13px;display:flex;align-items:center;justify-content:center}
+ol.steps>li h4{margin:0 0 6px;font-size:15px;font-weight:600;color:var(--tx)}
+ol.steps>li p{margin:0 0 10px;font-size:13.5px}
+
+ul.clean{list-style:none;padding:0;margin:14px 0;max-width:680px}
+ul.clean>li{position:relative;padding:6px 0 6px 22px;font-size:14px;color:var(--mut);border-bottom:1px solid var(--hair)}
+ul.clean>li:last-child{border-bottom:none}
+ul.clean>li::before{content:"";position:absolute;left:2px;top:13px;width:7px;height:7px;border-radius:2px;
+  background:var(--teal);transform:rotate(45deg)}
+
+/* code */
+.code{position:relative;background:#0b0f15;border:1px solid var(--line);border-radius:12px;margin:16px 0;overflow:hidden}
+.code .bar{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid var(--hair);
+  font-family:var(--mono);font-size:11px;color:var(--faint)}
+.code .bar .fn{color:var(--mut)}
+.code .copy{margin-left:auto;font-family:var(--ui);font-size:11px;font-weight:600;color:var(--mut);
+  background:var(--raise);border:1px solid var(--line);border-radius:7px;padding:3px 10px;cursor:pointer;transition:.12s}
+.code .copy:hover{color:var(--tx);border-color:var(--edge)}
+.code .copy.ok{color:var(--up);border-color:color-mix(in srgb,var(--up) 40%,transparent)}
+.code pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:#cbd5e3}
+.code pre .c{color:var(--faint)}
+.code pre .k{color:var(--blue)}
+.code pre .s{color:var(--teal)}
+.code pre .v{color:var(--warn)}
+code.inl{font-family:var(--mono);font-size:.88em;background:var(--raise);border:1px solid var(--line);
+  border-radius:6px;padding:1px 6px;color:#d4dde8}
+
+/* tables */
+.tbl{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:16px 0}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);
+  font-weight:600;padding:11px 16px;border-bottom:1px solid var(--hair);background:rgba(0,0,0,.16)}
+.tbl td{padding:11px 16px;font-size:13px;color:var(--mut);border-bottom:1px solid var(--hair);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{color:var(--tx);font-weight:500;white-space:nowrap}
+.tbl td .mono{color:var(--teal)}
+.tbl tr:hover td{background:rgba(255,255,255,.012)}
+.method{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;display:inline-block;min-width:42px;text-align:center}
+.method.get{color:var(--up);background:color-mix(in srgb,var(--up) 14%,transparent)}
+.method.post{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+
+/* check cards */
+.ckgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:18px 0}
+.ckcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px 19px;display:flex;flex-direction:column}
+.ckcard .r1{display:flex;align-items:center;gap:11px;margin-bottom:9px}
+.ckcard .abbr{font-family:var(--mono);font-size:11px;font-weight:700;padding:4px 8px;border-radius:7px;
+  color:#06281c;background:var(--up)}
+.ckcard h4{margin:0;font-size:15.5px;font-weight:600}
+.ckcard .iv{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);
+  border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.ckcard p{margin:0;font-size:13px;color:var(--mut);line-height:1.5}
+
+/* file tree */
+.tree{font-family:var(--mono);font-size:12.5px;line-height:1.85;color:var(--mut)}
+.tree .f{color:var(--teal)}
+.tree .cm{color:var(--faint)}
+
+/* status legend pills */
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.pill{font-size:11.5px;font-weight:600;padding:4px 11px 4px 9px;border-radius:20px;display:inline-flex;align-items:center;gap:7px}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill.up{color:var(--up);background:color-mix(in srgb,var(--up) 13%,transparent)}
+.pill.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 13%,transparent)}
+.pill.down{color:var(--down);background:color-mix(in srgb,var(--down) 15%,transparent)}
+.pill.paused{color:var(--paused);background:color-mix(in srgb,var(--paused) 14%,transparent)}
+.pill.ack{color:var(--ack);background:color-mix(in srgb,var(--ack) 14%,transparent)}
+
+footer{position:relative;z-index:1;border-top:1px solid var(--hair);padding:30px 28px;text-align:center;
+  font-size:12px;color:var(--faint);font-family:var(--mono);max-width:1200px;margin:0 auto}
+
+@media(max-width:980px){
+  .wrap{grid-template-columns:1fr;gap:0}
+  nav.toc{position:fixed;top:60px;left:0;width:264px;height:calc(100vh - 60px);background:var(--bg);
+    border-right:1px solid var(--line);padding:24px 16px;z-index:40;transform:translateX(-100%);transition:.2s;box-shadow:var(--shadow)}
+  nav.toc.open{transform:none}
+  .menu-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;
+    background:var(--raise);border:1px solid var(--line);color:var(--tx);font-size:17px;cursor:pointer}
+  .top .links{display:none}
+  .herorow{grid-template-columns:1fr}
+  .device{max-width:380px}
+  .hero h1{font-size:36px}
+  .fgrid,.ckgrid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="menu-btn" id="menuBtn" aria-label="Menu">≡</button>
+  <div class="brand">
+    <div class="mk">H</div>
+    <div class="nm">Host Monitor<small>v1.4.3 · ESP32-S3 firmware</small></div>
+  </div>
+  <div class="links">
+    <a href="#install">Install</a>
+    <a href="#firstrun">First run</a>
+    <a href="#transport">Transport</a>
+    <a href="#api">API</a>
+    <a class="ghbtn" href="#source">◆ Source layout</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" id="toc">
+    <div class="grp">Get started</div>
+    <a href="#overview"><span class="n">00</span>Overview</a>
+    <a href="#hardware"><span class="n">01</span>Hardware</a>
+    <div class="grp">Setup</div>
+    <a href="#install"><span class="n">02</span>Installation</a>
+    <a href="#dashboard"><span class="n">03</span>Dashboard assets</a>
+    <a href="#firstrun"><span class="n">04</span>First run</a>
+    <a href="#security"><span class="n">05</span>Security</a>
+    <div class="grp">Reference</div>
+    <a href="#hosts"><span class="n">06</span>hosts.csv format</a>
+    <a href="#checks"><span class="n">07</span>The five checks</a>
+    <a href="#api"><span class="n">08</span>Web / JSON API</a>
+    <a href="#source"><span class="n">09</span>Source layout</a>
+    <a href="#limits"><span class="n">10</span>Limitations</a>
+  </nav>
+
+  <main>
+    <!-- HERO -->
+    <div class="hero">
+      <div class="herorow">
+        <div>
+          <div class="eyebrow">Self-hosted network monitoring appliance</div>
+          <h1>Host Monitor</h1>
+          <p class="lead">A monitoring appliance for the Waveshare ESP32-S3-Touch-LCD-4.3. It watches a fleet of hosts with five pluggable checks, shows health on the on-device LCD, and serves a web dashboard embedded in the firmware — over plain HTTP behind Basic Auth — with email &amp; webhook alerting and pause / acknowledge governance.</p>
+          <div class="chips">
+            <span class="hchip"><span class="dot"></span>800×480 RGB touch panel</span>
+            <span class="hchip"><span class="dot"></span>5 checks per host</span>
+            <span class="hchip"><span class="dot"></span>HTTP + Basic Auth</span>
+            <span class="hchip"><span class="dot"></span>Email &amp; webhook alerts</span>
+          </div>
+        </div>
+        <div>
+          <div class="device">
+            <div class="screen">
+              <div class="scr-top"><span class="d"></span><b>Fleet Health</b><span class="t">14:52 · hostmon-01</span></div>
+              <div class="scr-body">
+                <div class="donut"><div class="ctr"><b>14</b><span>hosts</span></div></div>
+                <div class="scr-stats">
+                  <div class="sstat"><span class="sw" style="background:var(--up)"></span><span class="lb">Up</span><span class="vv c-up" style="color:var(--up)">11</span></div>
+                  <div class="sstat"><span class="sw" style="background:var(--warn)"></span><span class="lb">Warn</span><span class="vv" style="color:var(--warn)">1</span></div>
+                  <div class="sstat"><span class="sw" style="background:var(--down)"></span><span class="lb">Down</span><span class="vv" style="color:var(--down)">1</span></div>
+                  <div class="sstat"><span class="sw" style="background:var(--paused)"></span><span class="lb">Paused</span><span class="vv" style="color:var(--paused)">1</span></div>
+                </div>
+              </div>
+              <div class="scr-nav"><div class="on">◴ Home</div><div>▦ Hosts</div><div>≡ Alerts · Setup</div></div>
+            </div>
+          </div>
+          <div class="devtag">on-device LCD · Home screen</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OVERVIEW -->
+    <section id="overview">
+      <h2><span class="num">00</span>Overview</h2>
+      <div class="htitle">What it is</div>
+      <p>Host Monitor is an <strong>Arduino IDE</strong> project that turns a Waveshare ESP32-S3 touch display into a standalone uptime monitor. It loads a host list from <code class="inl">hosts.csv</code> in on-board flash (LittleFS), runs five checks against each host on independent schedules, and reports fleet status three ways: on the LCD, over an embedded web dashboard, and through alert delivery.</p>
+      <div class="fgrid">
+        <div class="fcard"><div class="ic">◴</div><h4>On-device LCD</h4><p>800×480 capacitive touch home screens — a health donut, a host grid, and an Alerts·Setup card, on a 3-tab nav with live refresh.</p></div>
+        <div class="fcard"><div class="ic">⌘</div><h4>Embedded dashboard</h4><p>The full web UI + JSON REST API are compiled into the firmware (gzip) and served over <strong>plain HTTP</strong>, gated by Basic Auth.</p></div>
+        <div class="fcard"><div class="ic">◎</div><h4>Five checks</h4><p>Ping, DNS, Port, HTTP and Trace — each with its own interval and per-host enable. The HTTP check has a per-host HTTP/HTTPS scheme.</p></div>
+        <div class="fcard"><div class="ic">✉</div><h4>Alerting</h4><p>SMTP email and webhook delivery routed per host on down / warn / recovered, with re-notify.</p></div>
+        <div class="fcard"><div class="ic">⏸</div><h4>Governance</h4><p>Pause and acknowledge with a required reason — kept on the host and surfaced in the UI.</p></div>
+        <div class="fcard"><div class="ic">◷</div><h4>Timekeeping</h4><p>Time comes from <strong>NTP</strong>, falling back to a runtime/uptime clock. (The on-board PCF85063 RTC is unused in this build — see Hardware.)</p></div>
+      </div>
+      <div class="legend">
+        <span class="pill up"><span class="dot"></span>Up</span>
+        <span class="pill warn"><span class="dot"></span>Warn</span>
+        <span class="pill down"><span class="dot"></span>Down</span>
+        <span class="pill paused"><span class="dot"></span>Paused</span>
+        <span class="pill ack"><span class="dot"></span>Acknowledged</span>
+      </div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- HARDWARE -->
+    <section id="hardware">
+      <h2><span class="num">01</span>Hardware</h2>
+      <div class="htitle">What you need</div>
+      <ul class="clean">
+        <li><strong>Waveshare ESP32-S3-Touch-LCD-4.3</strong> — ESP32-S3, 8 MB OPI PSRAM, 8 MB flash (some revisions ship 16 MB — match Flash Size + partitions to your chip)</li>
+        <li><strong>No microSD card and no RTC battery needed</strong> — the host list and dashboard both live in on-board flash</li>
+      </ul>
+      <div class="note teal"><span class="ic">!</span><div>The 4.3" panel is <b>parallel RGB (ST7262 / EK9716), not SPI</b>. Two things must happen before any pixels render: the <b>CH422G I/O expander</b> (I²C @ 0x20) must be initialised first (it drives LCD reset, backlight and GT911 touch reset), and <b>OPI 8 MB PSRAM must be enabled</b> or the 768 KB RGB framebuffer won't allocate.</div></div>
+      <div class="note warn"><span class="ic">!</span><div><b>This firmware is <code class="inl">Wire</code>-free — so the on-board PCF85063 RTC is unused.</b> The GT911 touch + CH422G expander run on the panel library's <i>legacy</i> IDF I²C driver; Arduino's <code class="inl">Wire</code> pulls in the <i>new</i> <code class="inl">driver_ng</code>, and linking both aborts at boot (<span class="mono">check_i2c_driver_conflict</span>). The RTC shares that bus, so it stays disabled; time comes from <b>NTP</b> with a runtime/uptime fallback.</div></div>
+      <p>The board library owns the I2C bus and brings up the expander → RGB bus → GT911 touch automatically once you select the Waveshare board in its config (covered in <a href="#install">Installation</a>).</p>
+      <div class="divider"></div>
+    </section>
+
+    <!-- INSTALL -->
+    <section id="install">
+      <h2><span class="num">02</span>Installation</h2>
+      <div class="htitle">Build environment</div>
+      <p>This is an Arduino IDE project. Set up the board package, libraries, and Tools-menu settings in order.</p>
+
+      <ol class="steps">
+        <li>
+          <h4>Install the ESP32 board package (pinned)</h4>
+          <p>Add the boards-manager URL, then install <strong>esp32 by Espressif → version 3.3.8</strong> — the version this code is built against (it relies on the IDF v5 / core 3.x APIs).</p>
+          <div class="code"><div class="bar"><span class="fn">Preferences → Additional boards manager URLs</span><button class="copy">Copy</button></div><pre>https://espressif.github.io/arduino-esp32/package_esp32_index.json</pre></div>
+        </li>
+        <li>
+          <h4>Install libraries</h4>
+          <p>From Library Manager unless noted. Versions matter — LVGL v9 and on-board TLS won't work against this code.</p>
+          <div class="tbl"><table>
+            <thead><tr><th>Library</th><th>Version</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>lvgl</td><td class="mono">8.4.x</td><td>Graphics engine. v9 will not compile.</td></tr>
+              <tr><td>ESP32_Display_Panel</td><td class="mono">1.0.4</td><td>Drives the CH422G expander + RGB bus + GT911 touch.</td></tr>
+              <tr><td>ESP32_IO_Expander</td><td class="mono">1.1.1</td><td>Dependency of ESP32_Display_Panel.</td></tr>
+              <tr><td>esp-lib-utils</td><td class="mono">0.3.0</td><td>Dependency of the panel stack.</td></tr>
+              <tr><td>ESP32_IDF5_HTTPS_Server</td><td class="mono">1.1.1</td><td>Used for its <strong>HTTP</strong> server + Basic Auth only (IDF5 fork of fhessel's server). Its TLS classes are not used — on-device HTTPS isn't viable here.</td></tr>
+              <tr><td>ArduinoJson</td><td class="mono">7.4.x</td><td>JSON API (code still uses the <code class="inl">DynamicJsonDocument</code> alias).</td></tr>
+              <tr><td>ESP Mail Client</td><td class="mono">mobizt 3.4.24</td><td>SMTP email alerts.</td></tr>
+            </tbody>
+          </table></div>
+          <p><code class="inl">LittleFS</code>, <code class="inl">WiFi</code>, <code class="inl">HTTPClient</code>, <code class="inl">WiFiClientSecure</code>, <code class="inl">ESPmDNS</code>, <code class="inl">Preferences</code>, the esp_ping/lwIP stack and mbedTLS ship with the ESP32 core.</p>
+        </li>
+        <li>
+          <h4>Place lv_conf.h</h4>
+          <p>Copy <code class="inl">lv_conf.h</code> from the sketch folder into your Arduino <code class="inl">libraries/</code> folder — it must sit <strong>next to</strong> the <code class="inl">lvgl</code> folder. This build sets <code class="inl">LV_MEM_CUSTOM=1</code> and allocates the LVGL pool in <strong>PSRAM</strong>, which frees internal RAM for Wi-Fi and the checks — don't skip it.</p>
+          <div class="code"><div class="bar"><span class="fn">~/Arduino/libraries/lv_conf.h</span><button class="copy">Copy</button></div><pre>…/Arduino/libraries/lv_conf.h   <span class="c"># next to the lvgl/ folder</span></pre></div>
+        </li>
+        <li>
+          <h4>Select the Waveshare board in ESP32_Display_Panel</h4>
+          <p>This is the single most important step. Place a file named <code class="inl">esp_panel_board_supported_conf.h</code> at your Arduino <code class="inl">libraries/</code> <strong>root</strong> (next to <code class="inl">lv_conf.h</code>) — the library finds it via <code class="inl">__has_include("../../../…")</code>, so it must live there, <strong>not</strong> inside the library folder. Without the board selected, <code class="inl">Board::init()</code> fails and the screen stays black (backlight on).</p>
+          <div class="code"><div class="bar"><span class="fn">~/Arduino/libraries/esp_panel_board_supported_conf.h</span><button class="copy">Copy</button></div><pre><span class="k">#define</span> ESP_PANEL_BOARD_DEFAULT_USE_SUPPORTED   <span class="v">(1)</span>
+<span class="k">#define</span> BOARD_WAVESHARE_ESP32_S3_TOUCH_LCD_4_3</pre></div>
+        </li>
+        <li>
+          <h4>Arduino IDE board settings (Tools menu)</h4>
+          <p>PSRAM <strong>must</strong> be OPI PSRAM. The app build is large (LVGL + HTTP server + mbedTLS + ESP Mail Client + Display Panel), so use the bundled custom partition table — a default scheme won't fit.</p>
+          <div class="tbl"><table><tbody>
+            <tr><td>Board</td><td>ESP32S3 Dev Module</td></tr>
+            <tr><td>PSRAM</td><td><span class="mono">OPI PSRAM</span> — mandatory</td></tr>
+            <tr><td>Flash Size</td><td>8MB (64Mb) — or 16MB if your board has it</td></tr>
+            <tr><td>Partition Scheme</td><td><span class="mono">Custom</span> → bundled <code class="inl">partitions.csv</code> (5 MB app / ~2.9 MB LittleFS / coredump)</td></tr>
+            <tr><td>Upload Speed</td><td><span class="mono">921600</span></td></tr>
+            <tr><td>USB CDC On Boot</td><td>Enabled (serial log; unreliable once RGB + Wi-Fi are live — the LCD surfaces diagnostics)</td></tr>
+          </tbody></table></div>
+        </li>
+      </ol>
+      <div class="divider"></div>
+    </section>
+
+    <!-- DASHBOARD ASSETS -->
+    <section id="dashboard">
+      <h2><span class="num">03</span>Dashboard assets</h2>
+      <div class="htitle">The web UI is embedded in the firmware</div>
+      <p>There is <strong>no separate filesystem upload</strong>. The <code class="inl">data/</code> folder (HTML / CSS / JS + <code class="inl">setup.html</code>) is gzip-compressed into <code class="inl">web_assets.h</code> and compiled straight into the binary, then served by the API's default route. Flashing the sketch ships the dashboard with it.</p>
+      <ol class="steps">
+        <li><h4>Edit the dashboard (optional)</h4><p>Change the files under <code class="inl">data/</code>, then regenerate <code class="inl">web_assets.h</code> from them so the embedded copy matches.</p></li>
+        <li><h4>Upload the sketch</h4><p>Sketch → Upload. That's it — the dashboard travels inside the firmware image. No LittleFS data-upload tool required.</p></li>
+        <li><h4>(Optional) seed a host list</h4><p>Fresh flash starts with no hosts — add them in the dashboard, or pre-seed by writing a <code class="inl">hosts.csv</code> to LittleFS. Either way it's persisted to and reloaded from flash.</p></li>
+      </ol>
+      <div class="note teal"><span class="ic">!</span><div>LittleFS is still used — just not for the UI. It holds the persistent <code class="inl">hosts.csv</code>, auto-created on first boot.</div></div>
+      <div class="note"><span class="ic">i</span><div>Changing a <b>header</b> (<code class="inl">config.h</code>, <code class="inl">model.h</code>…) or <code class="inl">web_assets.h</code> can leave a stale object in Arduino's build cache. If a change “doesn't take”, clear <code class="inl">…/arduino/sketches/*</code> and rebuild — the Alerts·Setup card shows a <code class="inl">built HH:MM:SS</code> marker so you can confirm the running binary is current.</div></div>
+      <div class="note warn"><span class="ic">!</span><div><b>First boot does a little one-time setup.</b> On a fresh board the firmware formats LittleFS, creates an empty <code class="inl">hosts.csv</code>, and generates a <b>random per-device web password</b> (shown on the LCD Alerts·Setup card). There's no on-device TLS key generation — the dashboard is plain HTTP — so the screen comes up in seconds.</div></div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- FIRST RUN -->
+    <section id="firstrun">
+      <h2><span class="num">04</span>First run</h2>
+      <div class="htitle">Two ways onto your network</div>
+      <p>Get the device onto your Wi-Fi one of two ways. <strong>Method 1</strong> bakes the network name and password into the firmware for a fixed deployment; <strong>Method 2</strong> is the interactive AP wizard. Either way you finish at the same place — <a href="#openboard">open the dashboard</a>.</p>
+
+      <h3>Method 1 — hardcode the Wi-Fi name &amp; password in config.h</h3>
+      <p>For a fixed deployment, set the SSID and password in <code class="inl">config.h</code> before flashing and skip the wizard entirely. If <code class="inl">WIFI_SSID_BUILTIN</code> is non-empty the device <strong>joins that network on every boot</strong> and ignores saved / AP credentials.</p>
+      <div class="code"><div class="bar"><span class="fn">config.h</span><button class="copy">Copy</button></div><pre><span class="k">#define</span> WIFI_SSID_BUILTIN  <span class="s">"my-ssid"</span>
+<span class="k">#define</span> WIFI_PASS_BUILTIN  <span class="s">"my-pass"</span>   <span class="c">// leave both "" for the AP wizard</span></pre></div>
+      <div class="note warn"><span class="ic">!</span><div>Baked-in credentials are <b>readable from the firmware image</b> — fine for a controlled deployment, but anyone with the binary can recover the PSK. Prefer this only on encrypted-flash builds.</div></div>
+
+      <h3>Method 2 — AP setup wizard</h3>
+      <ol class="steps">
+        <li><h4>Join the AP</h4><p>With no saved Wi-Fi, the device raises an <strong>open access point named <code class="inl">HostMon</code></strong>. Join it from a phone, then <strong>browse manually</strong> to <code class="inl">http://192.168.4.1</code> — there's no captive-portal auto-popup, so open the address by hand.</p></li>
+        <li><h4>Choose a network</h4><p>Pick your network and enter the password — the device saves them and <strong>reboots onto your LAN</strong>. There's no “stay an access point” mode; AP mode is only the no-credentials fallback.</p></li>
+      </ol>
+      <div class="note"><span class="ic">i</span><div><b>The AP is not captive.</b> The captive-portal auto-redirect was dropped — its DNS hijack asserted under the lwIP core lock on this core. The AP itself works fine; just open <code class="inl">http://192.168.4.1</code> manually after joining.</div></div>
+
+      <h3 id="openboard">Open the dashboard</h3>
+      <p>Once the device is on your LAN, browse to <strong>http://monitor.local/</strong> (or <code class="inl">http://&lt;ip&gt;/</code>, shown on the LCD). It's HTTP only — read the auto-generated login off the screen (see below).</p>
+
+      <h3 id="transport">Transport &amp; TLS</h3>
+      <p>The dashboard + API serve over <strong>plain HTTP only</strong>. <strong>On-device HTTPS was removed</strong> — it isn't viable on this board: an mbedTLS connection needs ~16–32&nbsp;KB of <em>contiguous internal</em> RAM, which the device can't reliably spare alongside Wi-Fi + the check engine + the web server. With it enabled the TLS listener came up but handshakes reset (<code class="inl">ERR_CONNECTION_RESET</code>) regardless of cert type, so the TLS server, cert provisioning, and embedded cert/key were all deleted.</p>
+      <div class="note teal"><span class="ic">!</span><div><b>To get real TLS, terminate it in front of the device</b> — a reverse proxy with a proper certificate (<b>Caddy</b> automatic HTTPS, <b>nginx</b>, or <b>Traefik</b> on a Pi / NAS / router) listening on 443 and forwarding to <code class="inl">http://&lt;device-ip&gt;/</code>. Or keep the device on a <b>trusted / isolated VLAN</b> and accept plain HTTP there.</div></div>
+
+      <h3>Login — auto-generated password</h3>
+      <p>On first boot the device generates a <strong>random per-device web password</strong> (12 chars, unambiguous alphabet) and shows it on the LCD Alerts·Setup card as <code class="inl">Web login: admin / …</code>. There is <strong>no shared default password</strong> — read it off the screen to log in, then set your own in Settings (8–39 chars); the LCD line disappears once you do.</p>
+      <div class="note warn"><span class="ic">!</span><div><b>Set your own password promptly.</b> Because the dashboard is cleartext HTTP, the Basic-Auth credential traverses the network unencrypted on an untrusted segment — the reverse proxy or VLAN above is what protects it. Change it in Settings, or via <code class="inl">POST /api/settings/auth</code>.</div></div>
+
+      <h3>Timekeeping</h3>
+      <p>Time comes from <strong>NTP</strong> once the network is up. Offline, or before NTP completes, the device falls back to an <strong>uptime-based runtime clock</strong>. The active source is reported as <code class="inl">device.time</code> (<span class="mono">ntp / runtime</span>) in <code class="inl">GET /api/summary</code>.</p>
+      <div class="note"><span class="ic">i</span><div>The on-board PCF85063 RTC is <b>unused in this build</b> — it shares the panel's legacy I²C bus, and this firmware stays <code class="inl">Wire</code>-free to avoid an I²C driver conflict at boot (see <a href="#hardware">Hardware</a>). So time does not survive a power loss before NTP re-syncs.</div></div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- SECURITY -->
+    <section id="security">
+      <h2><span class="num">05</span>Security</h2>
+      <div class="htitle">A LAN appliance, fail-closed on bad input</div>
+      <p>This is a <strong>LAN appliance</strong>, not an internet-facing service. Every data endpoint is gated by auth and every write is validated server-side, but it deliberately stops short of protections the hardware can't support (on-device TLS). The web-layer checks live in <code class="inl">api.cpp</code> / <code class="inl">validate.cpp</code> and run on every request.</p>
+      <div class="fgrid">
+        <div class="fcard"><div class="ic">▣</div><h4>Basic Auth, random password</h4><p>Every <code class="inl">/api/*</code> endpoint sits behind HTTP Basic Auth with a <strong>random per-device password</strong> generated on first boot — no shared default. Only the static shell is public.</p></div>
+        <div class="fcard"><div class="ic">≡</div><h4>Constant-time compare</h4><p>Credentials are checked byte-for-byte in constant time, so response timing can't leak how much of the password matched.</p></div>
+        <div class="fcard"><div class="ic">◇</div><h4>CSRF / Origin guard</h4><p>A cross-origin POST carrying a mismatched <code class="inl">Origin</code> / <code class="inl">Host</code> is rejected with <code class="inl">403</code> before it touches state.</p></div>
+        <div class="fcard"><div class="ic">▱</div><h4>Request body cap</h4><p>Bodies are capped at <strong>8&nbsp;KB</strong> and over-cap reads truncate, so a flood can't exhaust RAM on a constrained device.</p></div>
+        <div class="fcard"><div class="ic">↵</div><h4>Header-injection guard</h4><p>The webhook custom header rejects <span class="mono">CR&nbsp;/&nbsp;LF</span>, so a crafted value can't smuggle extra HTTP headers downstream.</p></div>
+        <div class="fcard"><div class="ic">✓</div><h4>Server-side validation</h4><p>Every POST + CSV row is validated in <code class="inl">validate.cpp</code> (IPv4/RFC-1123, interval whitelist, CSV-injection rejected); invalid input returns <code class="inl">400</code> and never mutates the store.</p></div>
+      </div>
+      <div class="note warn"><span class="ic">!</span><div><b>Known residuals — by design / hardware.</b> The dashboard is <b>cleartext HTTP</b>, so the Basic-Auth password and all API traffic cross the network unencrypted (front it with TLS or keep it on a trusted VLAN). <b>Outbound notifications use unverified TLS</b> — HTTPS webhooks &amp; SMTP-over-TLS are encrypted but the server cert isn't checked. <b>Secrets are stored in plaintext NVS</b> (no flash encryption by default). The auto-password is <b>visible on the LCD</b> until you change it, there's <b>no auth rate-limiting</b>, and <b>no Secure Boot</b> by default.</div></div>
+      <div class="note teal"><span class="ic">!</span><div><b>Recommended deployment.</b> Keep the appliance on a trusted or isolated <b>IoT VLAN</b>, firewalled off the internet; <b>set your own web password immediately</b>; put a <b>TLS reverse proxy</b> in front if you need encryption / remote access; and point notifications at <b>trusted endpoints</b> the device reaches over your own network. For higher assurance, enable ESP-IDF flash encryption + Secure Boot v2 (one-way fuses — test on a spare board first).</div></div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- HOSTS CSV -->
+    <section id="hosts">
+      <h2><span class="num">06</span>hosts.csv format</h2>
+      <div class="htitle">Defining your fleet</div>
+      <p>A header row is required, then one host per line. Every row is validated on load — malformed rows are skipped and logged over serial. Edits made in the dashboard are written back to this file in flash. New hosts default to <strong>ping only</strong> (enable other checks per host in the dashboard).</p>
+      <div class="code"><div class="bar"><span class="fn">/hosts.csv  ·  on-board flash (LittleFS)</span><button class="copy">Copy</button></div><pre><span class="c">name,address,group,checks,intervals,alerts</span>
+nas-01,192.168.1.10,Storage,<span class="s">ping|dns|port|http</span>,,down|recovered
+pihole,192.168.1.12,Network,<span class="s">ping|dns|port|http</span>,<span class="v">http:30</span>,down|warn|recovered
+home-asst,192.168.1.20,Apps,<span class="s">ping|dns|port|https</span>,<span class="v">ping:10|port:10</span>,down|warn|recovered
+example-blog,example.com,External,<span class="s">ping|dns|port|https|trace</span>,<span class="v">ping:60</span>,down|warn|recovered</pre></div>
+      <div class="tbl"><table>
+        <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>name</td><td>Display name for the host.</td></tr>
+          <tr><td>address</td><td>IP address or hostname to monitor.</td></tr>
+          <tr><td>group</td><td>Free-text group used to organise the fleet.</td></tr>
+          <tr><td>checks</td><td>Pipe list of enabled checks: <span class="mono">ping | dns | port | http | https | trace</span>. <code class="inl">http</code> = HTTP check over plaintext; <code class="inl">https</code> = over TLS, <strong>always insecure</strong> (accepts any cert).</td></tr>
+          <tr><td>intervals</td><td>Optional <span class="mono">key:seconds</span> overrides, e.g. <span class="mono">ping:10|http:30</span>. Seconds must be one of 10, 30, 60, 120, 300, 900, 3600, 21600, 43200, 86400.</td></tr>
+          <tr><td>alerts</td><td>Optional pipe list from <span class="mono">down | warn | recovered</span> (default <span class="mono">down|recovered</span>).</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note"><span class="ic">i</span><div>Legacy tokens from older files are accepted on load and normalised: <code class="inl">httpsv</code> → <code class="inl">https</code>, and <code class="inl">ssl</code> / <code class="inl">sslv</code> is silently dropped (the row still imports). On the next save the file is rewritten with the current keys.</div></div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- CHECKS -->
+    <section id="checks">
+      <h2><span class="num">07</span>The five checks</h2>
+      <div class="htitle">What each check does</div>
+      <p>Each host enables any subset of these. Every check runs on its own interval and reports its own state — the host's overall status is the worst of its active checks. The engine runs on a statically-allocated task pinned to core 0, away from the LVGL display loop on core 1.</p>
+      <div class="ckgrid">
+        <div class="ckcard"><div class="r1"><span class="abbr">PING</span><h4>Ping</h4><span class="iv">def 30s</span></div><p>ICMP reachability plus packet-loss % via esp_ping.</p></div>
+        <div class="ckcard"><div class="r1"><span class="abbr">DNS</span><h4>DNS</h4><span class="iv">def 5m</span></div><p>Resolves the hostname and times the lookup.</p></div>
+        <div class="ckcard"><div class="r1"><span class="abbr">PORT</span><h4>Port</h4><span class="iv">def 60s</span></div><p>TCP connect to a port (per host; default 80), bounded by <code class="inl">CONNECT_TIMEOUT_MS</code>.</p></div>
+        <div class="ckcard"><div class="r1"><span class="abbr">HTTP</span><h4>HTTP</h4><span class="iv">def 60s</span></div><p>GETs the host and expects a 2xx / 3xx. Per-host <span class="mono">http</span> / <span class="mono">https</span> scheme — HTTPS is always <strong>insecure</strong> (accepts any cert; reports reachability + status, not cert trust) and works on non-standard ports.</p></div>
+        <div class="ckcard"><div class="r1"><span class="abbr">TRACE</span><h4>Trace</h4><span class="iv">def 5m</span></div><p>Reachability plus a hop-count estimate from the reply TTL.</p></div>
+      </div>
+      <div class="note"><span class="ic">i</span><div>A standalone <b>SSL/TLS cert-expiry check</b> existed in earlier versions but was <b>removed</b> — verifying a remote certificate needs an outbound mbedTLS handshake whose ~16–32&nbsp;KB session buffers this board can't fund from free internal heap (see <a href="#transport">Transport</a>). Monitor certificate expiry from a host with more memory instead.</div></div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- API -->
+    <section id="api">
+      <h2><span class="num">08</span>Web / JSON API</h2>
+      <div class="htitle">REST endpoints</div>
+      <p>Everything is served over <strong>plain HTTP</strong> behind Basic Auth. Cross-origin POSTs are blocked, and every POST body is validated server-side; invalid input returns <code class="inl">400 {ok:false, error:"…"}</code>.</p>
+      <h3>Read</h3>
+      <div class="tbl"><table>
+        <thead><tr><th style="width:74px">Method</th><th>Endpoint</th><th>Returns</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method get">GET</span></td><td class="mono">/api/summary</td><td>Fleet counts + device / net + clock</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="mono">/api/hosts</td><td>All hosts</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="mono">/api/host?id=h1</td><td>One host</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="mono">/api/alerts</td><td>Recent alerts</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="mono">/api/settings</td><td>Email / webhook / defaults / device</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="mono">/api/status</td><td><span class="mono">{ap, online, ip, ssid}</span></td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="mono">/api/wifi/scan</td><td>Nearby networks</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Host governance &amp; editing</h3>
+      <div class="tbl"><table>
+        <thead><tr><th style="width:74px">Method</th><th>Endpoint</th><th>Body</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/host/ack</td><td><span class="mono">{id, reason, who?}</span> — reason required</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/host/pause</td><td><span class="mono">{id, reason, until?, who?}</span> — reason required</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/host/resume</td><td><span class="mono">{id}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/host/clear</td><td><span class="mono">{id}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/host/interval</td><td><span class="mono">{id, key, every}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/host</td><td><span class="mono">{id?, name, addr, group, checks[{key,enabled,every,port,secure}], alerts{}}</span> — writes CSV</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/host/delete</td><td><span class="mono">{id}</span></td></tr>
+        </tbody>
+      </table></div>
+      <h3>Settings &amp; system</h3>
+      <div class="tbl"><table>
+        <thead><tr><th style="width:74px">Method</th><th>Endpoint</th><th>Body</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/email</td><td><span class="mono">{host, port, from, to, user?, pass?, enabled, when[]}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/webhook</td><td><span class="mono">{url, method, header, enabled, when[]}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/defaults</td><td><span class="mono">{interval[5], fails, lcdHome, renotify, renotifyEvery}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/auth</td><td><span class="mono">{user, pass}</span> — pass 8–39 chars</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/test/email</td><td><span class="mono">{}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/test/webhook</td><td><span class="mono">{}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/sd/reload</td><td><span class="mono">{}</span> — reloads hosts.csv from flash</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/wifi/join</td><td><span class="mono">{ssid, pass}</span> — saves + reboots</td></tr>
+        </tbody>
+      </table></div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- SOURCE -->
+    <section id="source">
+      <h2><span class="num">09</span>Source layout</h2>
+      <div class="htitle">Flat sketch — Arduino compiles every .ino/.cpp/.h</div>
+      <div class="card">
+        <div class="tree">
+<span class="f">HostMonitor.ino</span>     <span class="cm">entry point: setup()/loop(), boot order (load hosts → web → display)</span>
+<span class="f">config.h</span>            <span class="cm">tunables, intervals, web/auth/wifi defaults</span>
+<span class="f">model.h/.cpp</span>        <span class="cm">Host / Check types + metadata (five check kinds)</span>
+<span class="f">store.h/.cpp</span>        <span class="cm">in-memory host store + governance (mutex-guarded)</span>
+<span class="f">validate.h/.cpp</span>     <span class="cm">input validation (CSV + API)</span>
+<span class="f">csv.h/.cpp</span>          <span class="cm">LittleFS hosts.csv read/write (validated) + storage diag</span>
+<span class="f">settings.h/.cpp</span>     <span class="cm">NVS config + first-boot password gen + NTP/runtime time</span>
+<span class="f">rtc.h/.cpp</span>          <span class="cm">PCF85063 driver — DISABLED in this build (single-I2C-driver)</span>
+<span class="f">checks.h/.cpp</span>       <span class="cm">the five checks (ping/dns/port/http/trace)</span>
+<span class="f">scheduler.h/.cpp</span>    <span class="cm">interval engine + status / alert transitions + load metrics</span>
+<span class="f">notifier.h/.cpp</span>     <span class="cm">SMTP email + webhook delivery (outbound TLS unverified)</span>
+<span class="f">wifi_portal.h/.cpp</span>  <span class="cm">STA join + 'HostMon' AP (non-captive) + mDNS</span>
+<span class="f">web_assets.h</span>        <span class="cm">data/ dashboard, gzipped + embedded in firmware</span>
+<span class="f">webserver.h/.cpp</span>    <span class="cm">plain-HTTP dashboard/API server (task-pumped)</span>
+<span class="f">api.h/.cpp</span>          <span class="cm">JSON REST + embedded gzip dashboard (Basic Auth + CSRF)</span>
+<span class="f">display.h/.cpp</span>      <span class="cm">CH422G → RGB → GT911 → LVGL bring-up (PSRAM)</span>
+<span class="f">theme.h/.cpp</span>        <span class="cm">LVGL design tokens + widget factories</span>
+<span class="f">ui.h/.cpp</span>           <span class="cm">LCD root + 3-tab nav (Home / Hosts / Alerts·Setup) + refresh</span>
+<span class="f">screen_health.cpp</span>   <span class="cm">LCD Home (donut + needs-attention)</span>
+<span class="f">screen_grid.cpp</span>     <span class="cm">LCD Hosts (scrollable host tiles)</span>
+<span class="f">lv_conf.h</span>           <span class="cm">LVGL v8 config (copy to libraries/)</span>
+<span class="f">partitions.csv</span>      <span class="cm">custom 8 MB layout (5 MB app / ~2.9 MB LittleFS)</span>
+<span class="f">data/</span>               <span class="cm">dashboard source (gzipped into web_assets.h)</span>
+<span class="f">sd/hosts.csv</span>        <span class="cm">sample host list (optional LittleFS seed)</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+    </section>
+
+    <!-- LIMITATIONS -->
+    <section id="limits">
+      <h2><span class="num">10</span>Limitations</h2>
+      <div class="htitle">Known limitations &amp; dropped features</div>
+      <p>Capabilities that were attempted and then removed (or never shipped) because of hardware or platform constraints on this board. Recorded here so the gaps — and <strong>why</strong> they exist — are explicit.</p>
+      <div class="note teal"><span class="ic">!</span><div>Almost everything below traces to one of two roots: <b>not enough free internal RAM for on-device TLS</b>, and the panel stack's <b>single-I²C-driver</b> requirement (which forces a <code class="inl">Wire</code>-free build).</div></div>
+
+      <h3>On-device TLS — all blocked by the same RAM limit</h3>
+      <p>An mbedTLS session needs ~16–32&nbsp;KB of <em>contiguous internal</em> RAM the chip can't spare alongside Wi-Fi + the check engine + the web server; <code class="inl">mbedtls_ssl_setup()</code> fails to allocate (surfaces as <code class="inl">ERR_CONNECTION_RESET</code> / <code class="inl">TLS fail -0x0000</code>). Everything here was cut for this one reason.</p>
+      <ul class="clean">
+        <li><strong>HTTPS for the dashboard</strong> — TLS server, runtime cert provisioning and the embedded cert/key all removed; the dashboard is plain HTTP only.</li>
+        <li><strong>Self-signed cert + trust-on-first-use</strong> — wired up as a lighter alternative, then abandoned; handshakes reset regardless of cert type (tested RSA and ECDSA).</li>
+        <li><strong>SSL/TLS certificate-expiry check</strong> — removed entirely (was one of the host checks).</li>
+        <li><strong>HTTPS host-check “verify” option</strong> — removed; HTTPS host checks are insecure-only (reachability + status, not cert trust).</li>
+        <li><strong>Notifier outbound TLS verification</strong> (HTTPS webhooks, SMTP-over-465 against the CA bundle) — removed; notifications are encrypted but server identity is not checked.</li>
+        <li><strong><code class="inl">cert&lt;14d</code> alert routing</strong> — collateral; its only trigger was the removed cert check.</li>
+        <li><strong>Verified HTTPS via <code class="inl">setCACertBundle()</code></strong> — abandoned earlier: the core CA bundle couldn't be referenced by symbol on this core (<code class="inl">undefined reference _binary_…_crt_bundle_bin</code>).</li>
+      </ul>
+
+      <h3>Hardware / driver conflicts</h3>
+      <ul class="clean">
+        <li><strong>On-board PCF85063 RTC</strong> — disabled. The build stays <code class="inl">Wire</code>-free to avoid the legacy/<code class="inl">driver_ng</code> I²C clash, so there's no wall clock across a power-cycle until NTP re-syncs.</li>
+        <li><strong>SD-card storage</strong> — dropped. SD chip-select falls back to GPIO10, an active RGB data line (DATA4); mounting SD while the panel runs corrupts the parallel bus. Persistence uses LittleFS instead.</li>
+        <li><strong>Captive-portal auto-redirect</strong> — dropped. The bundled DNSServer calls <code class="inl">udp_new()</code> without the lwIP core lock and asserts under core-locking. The AP still works — browse to its IP manually.</li>
+        <li><strong>Reliable runtime USB-serial logging</strong> — given up as the primary diagnostic channel; serial is unreliable once RGB + Wi-Fi are both live, so diagnostics surface on the LCD Alerts·Setup card.</li>
+      </ul>
+
+      <h3>Tried &amp; reverted (memory pressure)</h3>
+      <ul class="clean">
+        <li><strong>Internal-RAM LVGL draw buffers</strong> — attempted to fix the green RGB flicker, but consumed enough internal heap that the check task failed to create. Reverted to PSRAM draw buffers; the flicker was fixed instead with conditional <code class="inl">markDirty</code>.</li>
+      </ul>
+
+      <h3>Accepted platform pins</h3>
+      <ul class="clean">
+        <li><strong>LVGL stays on v8.4</strong> — v9 won't compile against this code.</li>
+        <li><strong>A custom <code class="inl">partitions.csv</code> is mandatory</strong> — the app won't fit a default partition scheme.</li>
+        <li><strong>The build must stay <code class="inl">Wire</code>-free</strong> — see the RTC note above.</li>
+      </ul>
+    </section>
+  </main>
+</div>
+
+<footer>Host Monitor v1.4.3 · Waveshare ESP32-S3-Touch-LCD-4.3 · Arduino IDE project</footer>
+
+<script>
+// ---- copy buttons ----
+document.querySelectorAll('.code').forEach(function(box){
+  var btn=box.querySelector('.copy'); if(!btn)return;
+  btn.addEventListener('click',function(){
+    var txt=box.querySelector('pre').innerText;
+    navigator.clipboard.writeText(txt).then(function(){
+      var old=btn.textContent;btn.textContent='Copied ✓';btn.classList.add('ok');
+      setTimeout(function(){btn.textContent=old;btn.classList.remove('ok')},1400);
+    });
+  });
+});
+
+// ---- scroll-spy ----
+var links=[].slice.call(document.querySelectorAll('nav.toc a'));
+var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a});
+var spy=new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(e.isIntersecting){
+      links.forEach(function(a){a.classList.remove('on')});
+      var on=map[e.target.id]; if(on)on.classList.add('on');
+    }
+  });
+},{rootMargin:'-44% 0px -50% 0px',threshold:0});
+document.querySelectorAll('main section[id]').forEach(function(s){spy.observe(s)});
+
+// ---- mobile menu ----
+var toc=document.getElementById('toc'),mb=document.getElementById('menuBtn');
+mb.addEventListener('click',function(){toc.classList.toggle('open')});
+toc.addEventListener('click',function(e){if(e.target.tagName==='A')toc.classList.remove('open')});
+</script>
+</body>
+</html>
