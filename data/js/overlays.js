@@ -2,8 +2,8 @@
 (function(){
   const {h,dot,pill,checks,donut,fmtEvery,freq,CHECK_NAME,CHECK_ABBR,CHECK_ICON,INTERVAL_OPTS}=UI;
   const A=()=>window.APP;
-  const DEF={ping:30,dns:300,port:60,http:60,trace:300};
-  const CHECK_KEYS=['ping','dns','port','http','trace'];
+  const DEF={ping:30,dns:300,port:60,http:60,ssl:43200,trace:300};
+  const CHECK_KEYS=['ping','dns','port','http','ssl','trace'];
 
   function scrim(child,onClose){
     const s=h('div',{cls:'scrim',onClick:onClose}); s.appendChild(child); return s;
@@ -55,7 +55,7 @@
 
     const fchecks=h('div',{cls:'fchecks'});
     st.checks.forEach(c=>{
-      const portI = (c.key==='port'||c.key==='http')
+      const portI = (c.key==='port'||c.key==='http'||c.key==='ssl')
         ? h('input',{cls:'input mono',style:{width:'72px',padding:'5px 8px'},placeholder:'port',value:c.port||'',
             oninput:e=>{ c.port=parseInt(e.target.value)||0; }}) : null;
       const schemeI = (c.key==='http')

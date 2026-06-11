@@ -29,11 +29,9 @@
     saveHost:(p)=>jpost('/api/host',p),
     deleteHost:(id)=>jpost('/api/host/delete',{id}),
 
-    saveEmail:(p)=>jpost('/api/settings/email',p),
     saveWebhook:(p)=>jpost('/api/settings/webhook',p),
     saveDefaults:(p)=>jpost('/api/settings/defaults',p),
     saveAuth:(user,pass)=>jpost('/api/settings/auth',{user,pass}),
-    testEmail:()=>jpost('/api/test/email'),
     testWebhook:()=>jpost('/api/test/webhook'),
     reloadSD:()=>jpost('/api/sd/reload'),
     wifiJoin:(ssid,pass)=>jpost('/api/wifi/join',{ssid,pass}),

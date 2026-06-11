@@ -2,7 +2,7 @@
 (function(){
   const {h,dot,pill,fmtEvery,LBL,CHECK_NAME,CHECK_ICON}=UI;
   const A=()=>window.APP;
-  const CHECK_KEYS=['ping','dns','port','http','trace'];
+  const CHECK_KEYS=['ping','dns','port','http','ssl','trace'];
 
   // ---------- Alerts ----------
   let af='all';
@@ -22,7 +22,7 @@
              atop.appendChild(h('button',{cls:'btn sm ghost'},'Mute')); }
       aright.appendChild(atop);
       const chan=h('div',{cls:'achan',title:'Notified via'});
-      (a.channels||[]).forEach(c=>chan.appendChild(h('span',{cls:'chan on'}, c==='email'?'✉':'↗')));
+      (a.channels||[]).forEach(()=>chan.appendChild(h('span',{cls:'chan on'},'↗')));
       aright.appendChild(chan);
       feed.appendChild(h('div',{cls:'arow '+a.sev},
         h('div',{cls:'amain'},
@@ -53,10 +53,6 @@
     const curEvery = fmtEvery(df.renotifyEvery||1800);
     const delivery=h('div',{cls:'card'},h('h3',{},'Delivery'),
       h('div',{style:{display:'flex',flexDirection:'column',gap:'11px'}},
-        h('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},h('span',{style:{fontSize:'18px'}},'✉'),
-          h('div',{style:{flex:'1'}},h('b',{style:{fontWeight:'600'}},'Email'),
-            h('div',{cls:'c-mut',style:{fontSize:'11.5px',fontFamily:'var(--mono)'}}, (STATE.settings.email.to||'—')+' · '+(STATE.settings.email.ok?'✓':'·')+' '+STATE.settings.email.lastTest)),
-          STATE.settings.email.enabled?h('span',{cls:'pill up'},dot('up'),'On'):h('span',{cls:'tag'},'Off')),
         h('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},h('span',{style:{fontSize:'18px'}},'↗'),
           h('div',{style:{flex:'1'}},h('b',{style:{fontWeight:'600'}},'Webhook'),
             h('div',{cls:'c-mut',style:{fontSize:'11.5px',fontFamily:'var(--mono)'}},'JSON · '+(STATE.settings.webhook.ok?'✓ ':'')+STATE.settings.webhook.last)),
@@ -78,7 +74,7 @@
       h('div',{style:{borderTop:'1px solid var(--hair)',paddingTop:'13px'}},
         h('div',{cls:'lbl',style:{marginBottom:'8px'}},'Notify on'),
         h('div',{cls:'chips'},[['down','Down'],['recovered','Recovered'],['warn','Warning']].map(([k,l])=>{
-          const on=(STATE.settings.email.when||[]).includes(k);
+          const on=(STATE.settings.webhook.when||[]).includes(k);
           return h('span',{cls:'chip'+(on?' on':''),onClick:()=>toggleNotifyOn(k)},l);})),
         h('div',{cls:'c-mut',style:{fontSize:'11px',marginTop:'9px'}},'Cert expiry warns at ',h('b',{style:{color:'var(--tx)'}},'14 days'))));
     return h('div',{},h('div',{cls:'dcols',style:{gridTemplateColumns:'1fr 320px'}},left,
@@ -86,9 +82,9 @@
   }
   function parseEvery(t){ if(t.endsWith('h')) return parseInt(t)*3600; return parseInt(t)*60; }
   function toggleNotifyOn(k){
-    const cur=new Set(STATE.settings.email.when||[]);
+    const cur=new Set(STATE.settings.webhook.when||[]);
     cur.has(k)?cur.delete(k):cur.add(k);
-    A().saveEmail({when:[...cur]});
+    A().saveWebhook({when:[...cur]});
   }
 
   // ---------- Plugins ----------
@@ -96,7 +92,7 @@
     const df=STATE.settings.defaults||{interval:[30,300,60,60,43200,300]};
     const card=h('div',{cls:'card',style:{maxWidth:'760px'}});
     const desc={ping:'ICMP reachability + packet loss %',dns:'Resolve the hostname to an IP (and time it)',
-      port:'TCP connect to a port',http:'Expect 2xx/3xx from a URL',trace:'Path + per-hop latency (hop estimate)'};
+      port:'TCP connect to a port',http:'Expect 2xx/3xx from a URL',ssl:'Warn N days before cert expires',trace:'Path + per-hop latency (hop estimate)'};
     CHECK_KEYS.forEach((k,i)=> card.appendChild(h('div',{cls:'checkrow'},
       h('div',{cls:'ci',style:{color:'var(--teal)'}},CHECK_ICON[k]),
       h('div',{cls:'cmid'},h('div',{cls:'cn'},CHECK_NAME[k]),h('div',{cls:'cd',style:{fontFamily:'var(--ui)'}},desc[k])),
@@ -110,7 +106,7 @@
 
   // ---------- Settings ----------
   function settings(){
-    const s=STATE.settings, df=s.defaults, em=s.email, wh=s.webhook;
+    const s=STATE.settings, df=s.defaults, wh=s.webhook;
     const head=h('div',{cls:'pagehead'},h('div',{},h('h2',{},'Settings'),h('div',{cls:'sub'},'Device · host list · notifications · defaults')));
 
     // Default intervals (editable, click to cycle through allowed steps)
@@ -126,22 +122,6 @@
       grid.appendChild(tile);
     });
     intvl.appendChild(grid);
-
-    // Email card
-    const emInputs={};
-    const emWhen=new Set(em.when||[]);
-    const emCard=h('div',{cls:'card'},h('h3',{},'✉ Email',h('span',{cls:'right'},'SMTP')),
-      field('SMTP server', emInputs.host=inp('mono',em.host+':'+em.port)),
-      h('div',{cls:'row2'}, field('From',emInputs.from=inp('mono',em.from),'1'), field('To',emInputs.to=inp('mono',em.to),'1')),
-      h('div',{cls:'field'},h('label',{},'SMTP password'),emInputs.pass=inp('mono','')),
-      whenChips(['down','warn','recovered'],emWhen),
-      h('div',{style:{display:'flex',gap:'9px',alignItems:'center',marginTop:'4px'}},
-        h('button',{cls:'btn pri sm',onClick:()=>saveEmail()},'Save'),
-        h('button',{cls:'btn sm',onClick:()=>A().testEmail()},'Send test ✉'),
-        h('span',{cls:'c-mut',style:{marginLeft:'auto',fontSize:'11.5px'}}, (em.ok?'✓ ':'')+em.lastTest)));
-    function saveEmail(){ const hp=emInputs.host.value.split(':');
-      A().saveEmail({enabled:true,host:hp[0],port:parseInt(hp[1]||'465'),from:emInputs.from.value,to:emInputs.to.value,
-        pass:emInputs.pass.value||undefined, when:[...emWhen]}); }
 
     // Webhook card
     const whInputs={}; const whWhen=new Set(wh.when||[]); let whMethod=wh.method||'POST';
@@ -198,7 +178,7 @@
         h('button',{cls:'btn pri sm',onClick:()=>A().saveAuth(userI.value, passI.value)},'Update login'),
         h('span',{cls:'c-mut',style:{marginLeft:'auto',fontSize:'11.5px'}},'leave password blank to keep current')));
 
-    return h('div',{},head,intvl,h('div',{cls:'sgrid'},emCard,whCard,sdCard,devCard,authCard));
+    return h('div',{},head,intvl,h('div',{cls:'sgrid'},whCard,sdCard,devCard,authCard));
 
     function field(label,input,flex){ return h('div',{cls:'field',style:flex?{flex:flex}:null},h('label',{},label),input); }
     function inp(cls,val){ return h('input',{cls:'input '+(cls||''),value:val==null?'':val}); }

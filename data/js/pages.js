@@ -213,7 +213,6 @@
         h('span',{cls:'c-mut'},k),h('b',{cls:'mono',style:{fontWeight:'500'}},v))));
     const notif=h('div',{cls:'card'},h('h3',{},'Notifies via'),
       h('div',{style:{display:'flex',gap:'8px',marginBottom:'12px'}},
-        host.alerts&&host.alerts.down!==undefined?h('span',{cls:'chan on'},'✉ EMAIL'):h('span',{cls:'chan on'},'✉ EMAIL'),
         h('span',{cls:'chan on'},'↗ WEBHOOK')),
       h('div',{cls:'c-mut',style:{fontSize:'12px',lineHeight:'1.6'}},'Alerts fire on '+
         ((host.alerts&&host.alerts.down)?'DOWN':'')+((host.alerts&&host.alerts.recovered)?' and RECOVERED':'')+
@@ -230,7 +229,7 @@
         h('div',{style:{display:'flex',flexDirection:'column',gap:'18px'}},checksCard,upCard),
         h('div',{style:{display:'flex',flexDirection:'column',gap:'18px'}},det,notif,hist)));
   }
-  function defFor(key){ const d={ping:30,dns:300,port:60,http:60,trace:300}; return d[key]; }
+  function defFor(key){ const d={ping:30,dns:300,port:60,http:60,ssl:43200,trace:300}; return d[key]; }
 
   window.PAGES={dashboard,hosts,detail,
     resetHostFilters:()=>{hq='';hgrp='all';hst='all';}};

@@ -2,7 +2,7 @@
 (function(){
   const {h,clear}=UI;
   window.STATE={summary:{total:0,up:0,warn:0,down:0,paused:0,ack:0,attention:0,uptime30:0},
-    hosts:[], alerts:[], settings:{defaults:{interval:[30,300,60,60,43200,300],fails:3,lcdHome:'A'},email:{when:[]},webhook:{when:[]},sd:{},device:{}},
+    hosts:[], alerts:[], settings:{defaults:{interval:[30,300,60,60,43200,300],fails:3,lcdHome:'A'},webhook:{when:[]},sd:{},device:{}},
     page:'dashboard', selectedId:null, overlay:null};
 
   const NAV=[['dashboard','◧','Dashboard'],['hosts','≣','Hosts'],['alerts','◔','Alerts'],['plugins','◇','Plugins'],['settings','⚙','Settings']];
@@ -46,11 +46,9 @@
     setEvery:(id,key,every)=>act(API.setEvery(id,key,every),'Interval updated'),
     saveHost:(p)=>act(API.saveHost(p).then(()=>APP.closeOverlay()),'Host saved'),
     deleteHost:(id)=>act(API.deleteHost(id).then(()=>APP.closeOverlay()),'Host removed'),
-    saveEmail:(p)=>act(API.saveEmail(p),'Email settings saved'),
     saveWebhook:(p)=>act(API.saveWebhook(p),'Webhook settings saved'),
     saveDefaults:(p)=>act(API.saveDefaults(p),'Defaults saved'),
     saveAuth:(u,p)=>act(API.saveAuth(u,p),'Web login updated'),
-    testEmail:()=>act(API.testEmail(),'Test email sent'),
     testWebhook:()=>act(API.testWebhook(),'Test webhook sent'),
     reloadSD:()=>act(API.reloadSD(),'Reloaded hosts from flash'),
 
@@ -78,7 +76,6 @@
         h('div',{cls:'dr'},h('span',{},'Network'),h('b',{cls:online?'c-up':'c-warn'}, online?'● On LAN':'● AP mode')),
         h('div',{cls:'dr'},h('span',{},'Address'),h('b',{},d.ip||'—')),
         h('div',{cls:'dr'},h('span',{},'Host list'),h('b',{},'Flash · '+(s.total||0))),
-        h('div',{cls:'dr'},h('span',{},'Email'),h('b',{cls:STATE.settings.email.enabled?'c-up':'c-mut'}, STATE.settings.email.enabled?'On':'Off')),
         h('div',{cls:'dr'},h('span',{},'Webhook'),h('b',{cls:STATE.settings.webhook.enabled?'c-up':'c-mut'}, STATE.settings.webhook.enabled?'On':'Off')),
         h('button',{cls:'btn sm lcdbtn',style:{marginTop:'7px'},onClick:()=>APP.openSetup()},'⛭ Run setup wizard')));
   }

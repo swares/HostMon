@@ -1,8 +1,8 @@
 /* ui.js — shared constants, a tiny DOM builder, and SVG/widget render helpers. */
 (function(){
-  const CHECK_NAME={ping:'Ping',dns:'DNS resolution',port:'Port open',http:'HTTP code',trace:'Traceroute'};
-  const CHECK_ABBR={ping:'PNG',dns:'DNS',port:'PRT',http:'HTP',trace:'TRC'};
-  const CHECK_ICON={ping:'◌',dns:'⊙',port:'⊟',http:'⤓',trace:'⋯'};
+  const CHECK_NAME={ping:'Ping',dns:'DNS resolution',port:'Port open',http:'HTTP code',ssl:'SSL/TLS expiry',trace:'Traceroute'};
+  const CHECK_ABBR={ping:'PNG',dns:'DNS',port:'PRT',http:'HTP',ssl:'SSL',trace:'TRC'};
+  const CHECK_ICON={ping:'◌',dns:'⊙',port:'⊟',http:'⤓',ssl:'⛨',trace:'⋯'};
   const LBL={up:'Up',warn:'Warning',down:'Down',paused:'Paused',ack:'Ack’d',off:'Off'};
   const INTERVAL_OPTS=[10,30,60,120,300,900,3600,21600,43200,86400];
   const COL={up:'#34d399',warn:'#fbbf24',down:'#f87171',paused:'#a78bfa',ack:'#38bdf8'};
