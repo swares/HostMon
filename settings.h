@@ -43,6 +43,8 @@ struct Defaults {
 
 namespace Settings {
   void begin();
+  void ensureWebPassword();   // gen the random first-boot password — call AFTER Wi-Fi is up
+                              // (esp_random needs the RF subsystem for true entropy)
   void save();
 
   WebhookCfg& webhook();

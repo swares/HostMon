@@ -50,16 +50,25 @@ bool Valid::isHostname(const char* s){
   return true;
 }
 
+// Reject a leading =, +, -, @ — these turn a value into a formula if hosts.csv is ever
+// opened in a spreadsheet (CSV/formula injection). Applied to free-text name/group;
+// addresses can't begin with them anyway (IPv4 starts with a digit, hostnames with
+// alphanumerics).
+static bool noLeadingFormula(const char* s){
+  return !(s[0]=='='||s[0]=='+'||s[0]=='-'||s[0]=='@');
+}
 bool Valid::hostName(const char* s, char* e, size_t en){
   if(!nonEmpty(s)){ setErr(e,en,"name required"); return false; }
   if(!lenAtMost(s,31)){ setErr(e,en,"name too long (max 31)"); return false; }
   if(!isPrintableAscii(s)||!noCsvSpecials(s)){ setErr(e,en,"name has invalid characters"); return false; }
+  if(!noLeadingFormula(s)){ setErr(e,en,"name can't start with = + - @"); return false; }
   return true;
 }
 bool Valid::groupName(const char* s, char* e, size_t en){
   if(!nonEmpty(s)){ setErr(e,en,"group required"); return false; }
   if(!lenAtMost(s,23)){ setErr(e,en,"group too long (max 23)"); return false; }
   if(!isPrintableAscii(s)||!noCsvSpecials(s)){ setErr(e,en,"group has invalid characters"); return false; }
+  if(!noLeadingFormula(s)){ setErr(e,en,"group can't start with = + - @"); return false; }
   return true;
 }
 bool Valid::address(const char* s, char* e, size_t en){

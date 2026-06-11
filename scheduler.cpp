@@ -92,43 +92,61 @@ void Scheduler::runOnce(){
   uint32_t nowS = millis()/1000;
 
   for(int i=0;i<Store::count();i++){
-    Host* h; Store::lock(); h=Store::at(i); Store::unlock();
-    if(!h) continue;
-    if(h->status==Status::Paused) continue;          // checks disabled
+    // Snapshot the host under lock. The checks below run UNLOCKED for seconds; a
+    // concurrent /api/host/delete compacts the static host array, so a cached pointer
+    // (or the index) could end up reading/writing a DIFFERENT host's slot. We run the
+    // checks against this immutable copy and re-find the live host by id for every
+    // write-back — so a result can never be misattributed, and a host deleted mid-scan
+    // is simply skipped.
+    Host snap; bool ok=false;
+    Store::lock();
+    { Host* h=Store::at(i); if(h && h->status!=Status::Paused){ snap=*h; ok=true; } }
+    Store::unlock();
+    if(!ok) continue;                                  // gone, or paused (checks disabled)
 
     bool stateChanged=false;  // did any check's STATE change this scan? (drives the LCD)
     for(uint8_t c=0;c<kCheckCount;c++){
-      Check& chk=h->checks[c];
-      if(!chk.enabled) continue;
-      uint32_t every = chk.every? chk.every : defaultInterval((CheckKind)c);
-      if(chk.lastRun!=0 && (nowS-chk.lastRun) < every) continue;
+      if(!snap.checks[c].enabled) continue;
+      uint32_t every = snap.checks[c].every? snap.checks[c].every : defaultInterval((CheckKind)c);
+      if(snap.checks[c].lastRun!=0 && (nowS-snap.checks[c].lastRun) < every) continue;
 
       g_ran++;
       uint32_t cs = millis();
-      CheckResult res = Checks::run(*h, (CheckKind)c);   // network-blocking
-      if(millis()-cs >= CHECK_SLOW_MS) g_timeouts++;     // ran the full timeout
+      CheckResult res = Checks::run(snap, (CheckKind)c);   // against the immutable snapshot
+      if(millis()-cs >= CHECK_SLOW_MS) g_timeouts++;       // ran the full timeout
 
       Store::lock();
-      chk.lastRun=nowS;
-      CheckState oldState = chk.state;
-      chk.state=res.state;
-      if(res.state != oldState) stateChanged = true;     // only a transition repaints the LCD
-      strlcpy(chk.detail,res.detail,sizeof(chk.detail));
-      if(res.rttMs){ chk.lastRttMs=res.rttMs; pushHist(chk,res.rttMs); }
-      if((CheckKind)c==CheckKind::Ping && res.rttMs) h->rtt=res.rttMs;
-      h->last=0;
+      Host* live=Store::byId(snap.id);                     // re-find; may be gone mid-scan
+      if(live){
+        Check& chk=live->checks[c];
+        chk.lastRun=nowS;
+        CheckState oldState = chk.state;
+        chk.state=res.state;
+        if(res.state != oldState) stateChanged = true;     // only a transition repaints the LCD
+        strlcpy(chk.detail,res.detail,sizeof(chk.detail));
+        if(res.rttMs){ chk.lastRttMs=res.rttMs; pushHist(chk,res.rttMs); }
+        if((CheckKind)c==CheckKind::Ping && res.rttMs) live->rtt=res.rttMs;
+        live->last=0;
+      }
       Store::unlock();
     }
 
-    char ev[12]; char msg[80];
-    Store::lock(); bool fire=evaluateHost(h,ev,sizeof(ev)); strlcpy(msg,h->msg,sizeof(msg)); Store::unlock();
-    // Only repaint the LCD when a check's STATE actually changed (a real transition).
-    // A check re-running with the same result changes nothing the LCD shows (dot +
-    // chip colours are by state), so marking dirty every scan just forced needless
-    // full-screen rebuilds — the PSRAM-bus saturation behind the green underrun lines.
-    // (evaluateHost()/recomputeStatus() also marks dirty on a host-status transition.)
+    // Only repaint the LCD on a real state transition — a check re-running with the same
+    // result changes nothing the LCD shows (dot + chip colours are by state), so marking
+    // dirty every scan forced needless full-screen rebuilds (the PSRAM-bus saturation
+    // behind the green underrun lines). recomputeStatus() also marks dirty on a host-status
+    // transition.
     if(stateChanged) Store::markDirty();
-    if(fire) Notifier::notify(*h, ev, msg[0]?msg:"Recovered");   // network I/O, lock released
+
+    // Evaluate + notify on the LIVE host (re-found by id). evaluateHost() mutates it, so it
+    // runs under lock; then reuse `snap` to capture its post-evaluate state for the
+    // (network, unlocked) notify.
+    char ev[12]={0}; char msg[80]={0}; bool fire=false, have=false;
+    Store::lock();
+    { Host* live=Store::byId(snap.id);
+      if(live){ fire=evaluateHost(live,ev,sizeof(ev)); strlcpy(msg,live->msg,sizeof(msg)); snap=*live; have=true; } }
+    Store::unlock();
+    if(fire && have) Notifier::notify(snap, ev, msg[0]?msg:"Recovered");   // lock released
     vTaskDelay(pdMS_TO_TICKS(20));
   }
   Store::recount();

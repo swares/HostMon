@@ -11,7 +11,7 @@ lives on the flash filesystem (LittleFS) and the dashboard assets are compiled i
 firmware. This is an **Arduino IDE** project (a flat sketch — Arduino builds every
 `.ino/.cpp/.h` in the folder).
 
-Firmware version: **1.4.18**.
+Firmware version: **1.4.20**.
 
 ---
 
@@ -338,22 +338,28 @@ it anywhere beyond your LAN.
 
 - **Authentication.** Every `/api/*` endpoint requires **HTTP Basic Auth**. The password
   is **randomly generated per device on first boot** (12 chars, unambiguous alphabet) —
-  there is **no shared default**. Credentials are compared in **constant time** to avoid
-  timing oracles. Only the static dashboard shell (HTML/CSS/JS) is public; all data and
-  all mutations sit behind auth.
+  there is **no shared default**. It's generated *after* Wi-Fi starts, so `esp_random()`
+  draws on the hardware RNG with the RF subsystem active (true entropy, not the weaker
+  pre-RF PRNG). Credentials are compared in **constant time** to avoid timing oracles.
+  Only the static dashboard shell (HTML/CSS/JS) is public; all data and all mutations sit
+  behind auth.
 - **CSRF.** State-changing requests are rejected unless the `Origin`/`Host` check passes,
   so a malicious page in the user's browser can't drive the API. Same-origin dashboard
   traffic and non-browser clients (curl, scripts) are unaffected.
 - **Input validation (fail closed).** All API and CSV input is validated server-side
   (`validate.cpp`): hostnames/addresses limited to IPv4 or RFC-1123 hostnames, intervals
-  restricted to a fixed whitelist, **CSV-injection** characters rejected, strings capped
-  and limited to printable ASCII, and the webhook custom header **rejects CR/LF** (no
-  header injection). Request bodies are **capped at 8 KB**. Invalid input returns
-  `400 {ok:false,error:…}` and is never persisted.
-- **Safe persistence.** Hosts load *before* the web server starts and `saveHosts()`
-  refuses to run until that load completes, so a boot-race request can't truncate
-  `hosts.csv`. NVS blobs are length-checked on load, so a struct-layout change across a
-  firmware update can't be read back misaligned.
+  restricted to a fixed whitelist, **CSV-injection** characters rejected (and name/group
+  may not *start* with `= + - @`, so a value can't become a spreadsheet **formula** if
+  `hosts.csv` is opened in Excel), strings capped and limited to printable ASCII, and the
+  webhook custom header **rejects CR/LF** (no header injection). Request bodies are **capped
+  at 8 KB**. Invalid input returns `400 {ok:false,error:…}` and is never persisted.
+- **Safe persistence + concurrency.** Hosts load *before* the web server starts and
+  `saveHosts()` refuses to run until that load completes, so a boot-race request can't
+  truncate `hosts.csv`. NVS blobs are length-checked on load, so a struct-layout change
+  across a firmware update can't be read back misaligned. The check engine **snapshots a
+  host under lock** and runs the (seconds-long, unlocked) checks against the copy, re-finding
+  the live host by id for every write-back — so deleting a host from the dashboard mid-scan
+  can't misattribute a result or touch a stale slot.
 - **Governance.** Pause/acknowledge actions require a non-empty reason and are recorded,
   giving an audit trail for suppressed alerts.
 

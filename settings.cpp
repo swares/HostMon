@@ -52,11 +52,18 @@ void Settings::begin(){
   loadBlob("wifi",    &g_wifi,    sizeof(g_wifi));
   loadBlob("def",     &g_def,     sizeof(g_def));
   loadBlob("auth",    &g_auth,    sizeof(g_auth));
+}
 
+void Settings::ensureWebPassword(){
   // First boot (or after a flash erase): the password is still the compile-time
   // default. Replace it with a random per-device one so no two units ship with the
   // same known credential. It's shown on the Alerts/Setup card until the user sets
-  // their own. Runs before Display::begin(), so the NVS write here is panel-safe.
+  // their own.
+  //
+  // IMPORTANT: this MUST run AFTER Wi-Fi is started — esp_random() only produces true
+  // hardware-random output once the RF subsystem is enabled; before that it's a weaker
+  // PRNG, which would make this credential more predictable. Still called before
+  // Display::begin(), so the NVS write stays panel-safe (flash write w/ cache enabled).
   if(strcmp(g_auth.pass, WEB_PASS_DEFAULT)==0){
     genPassword(g_auth.pass, sizeof(g_auth.pass));
     g_auth.autoGen = true;

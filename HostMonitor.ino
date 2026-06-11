@@ -93,6 +93,10 @@ void setup() {
   Csv::loadHosts(HOSTS_CSV_PATH);
   Store::recount();
   WifiPortal::begin();
+  // Generate the random web password now — Wi-Fi (RF) is up, so esp_random() has real
+  // hardware entropy. Done before WebServer::begin() (so auth is set before the server
+  // serves) and before Display::begin() (so the NVS write is panel-safe).
+  Settings::ensureWebPassword();
   WebServer::begin();
 
   g_displayOk = Display::begin();   // TCA9554 expander -> RGB -> GT911 -> LVGL
