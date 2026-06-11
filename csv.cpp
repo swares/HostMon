@@ -60,6 +60,7 @@ static CheckKind kindFromKey(const char* k){
   if(!strcmp(k,"ping"))return CheckKind::Ping; if(!strcmp(k,"dns"))return CheckKind::Dns;
   if(!strcmp(k,"port"))return CheckKind::Port; if(!strcmp(k,"http"))return CheckKind::Http;
   if(!strcmp(k,"https")||!strcmp(k,"httpsv"))return CheckKind::Http;  // Http check, secure (v=verify)
+  if(!strcmp(k,"ssl")||!strcmp(k,"sslv"))return CheckKind::Ssl;       // cert-expiry check (sslv legacy)
   return CheckKind::Trace;
 }
 
@@ -78,21 +79,6 @@ int Csv::loadHosts(const char* path){
 
     char* col[6]={0}; int nc=split(line,',',col,6);
     if(nc<3) continue;
-
-    // Legacy compat: the SSL/TLS-expiry check was removed (on-device TLS isn't
-    // viable on this board). Strip any ssl|sslv tokens from old hosts.csv rows so
-    // the host still loads instead of being rejected as an "unknown check key".
-    // On the next save the token is gone for good.
-    static char checksClean[64];
-    if(nc>=4 && col[3] && *col[3]){
-      char tmp[64]; strlcpy(tmp,col[3],sizeof(tmp));
-      char* pp[10]={0}; int npp=split(tmp,'|',pp,10);
-      checksClean[0]=0; bool f1=true;
-      for(int i=0;i<npp;i++){ if(!strcmp(pp[i],"ssl")||!strcmp(pp[i],"sslv")) continue;
-        if(!f1) strlcat(checksClean,"|",sizeof(checksClean));
-        strlcat(checksClean,pp[i],sizeof(checksClean)); f1=false; }
-      col[3]=checksClean;
-    }
 
     // -- validate the row BEFORE allocating a host; skip & log bad rows ----
     char verr[48]={0};

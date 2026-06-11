@@ -1,11 +1,11 @@
 /* ============================================================================
- *  api.h — JSON REST API + static file serving over HTTPS (esp32_https_server).
- *  All routes require HTTP Basic Auth. POST bodies are validated (validate.h).
+ *  api.h — JSON REST API + static file serving over HTTP (esp32_https_server's
+ *  HTTP server). All routes require HTTP Basic Auth. POST bodies validated (validate.h).
  *
  *  GET  /api/summary /hosts /host?id= /alerts /settings /status /wifi/scan
  *  POST /api/host/{ack,pause,resume,clear,interval,delete}  /api/host
- *  POST /api/settings/{email,webhook,defaults,auth}
- *  POST /api/test/{email,webhook}  /api/sd/reload  /api/wifi/{join,ap}
+ *  POST /api/settings/{webhook,defaults,auth}
+ *  POST /api/test/webhook  /api/sd/reload  /api/wifi/join
  * ========================================================================== */
 #pragma once
 namespace httpsserver { class HTTPServer; class HTTPRequest; class HTTPResponse; }

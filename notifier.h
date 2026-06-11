@@ -1,5 +1,5 @@
 /* ============================================================================
- *  notifier.h — email (SMTP) + webhook alert delivery.
+ *  notifier.h — webhook (HTTPS/HTTP) alert delivery. (Email/SMTP removed — §10.)
  * ========================================================================== */
 #pragma once
 #include "model.h"
@@ -9,8 +9,7 @@ namespace Notifier {
   // event one of: host.down, host.warn, host.up (recovered), cert.expiring
   void notify(const Host& h, const char* event, const char* msg);
 
-  // Manual "Send test" actions from Settings. Return true on success.
-  bool testEmail(char* err, size_t en);
+  // Manual "Send test" action from Settings. Returns true on success.
   bool testWebhook(char* err, size_t en);
 
   // Build the canonical JSON payload (also used by the webhook preview).

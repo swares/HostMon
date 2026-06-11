@@ -8,7 +8,7 @@
 
 // ---- Identity -------------------------------------------------------------
 #define DEVICE_NAME        "hostmon-01"
-#define FIRMWARE_VERSION   "1.4.3"
+#define FIRMWARE_VERSION   "1.4.18"
 #define MDNS_HOSTNAME      "monitor"          // -> http://monitor.local
 #define AP_SSID            "HostMon"          // first-run captive AP
 #define AP_IP_OCTETS       192,168,4,1
@@ -47,12 +47,20 @@
 #define LCD_W              800
 #define LCD_H              480
 #define LVGL_TICK_MS       2
-#define LCD_REFRESH_MS     1000               // redraw LCD data this often
+#define LCD_REFRESH_MS     1000               // UI::loop tick: clock + in-place gauge updates
+#define LCD_REBUILD_MS     5000               // min interval between FULL screen rebuilds.
+                                              // A rebuild tears down + repaints every widget; its
+                                              // PSRAM draw-buf -> PSRAM framebuffer copy starves the
+                                              // RGB DMA (green underrun lines on the left edge). With
+                                              // many checks the store goes dirty ~every scan, so we
+                                              // coalesce rebuilds to this cadence. Raise it if the
+                                              // lines persist; host data changes slowly regardless.
 
 // ---- Monitoring engine ----------------------------------------------------
-#define MAX_HOSTS          64
-#define CHECKS_PER_HOST    5                   // ping,dns,port,http,trace
-#define CHECK_TASK_STACK   16384                // HTTPS host check uses WiFiClientSecure/mbedTLS (deep stack)
+#define MAX_HOSTS          24                  // static Host g_hosts[MAX_HOSTS] (~1 KB/host) lives
+                                               // in internal SRAM — keep modest to preserve heap.
+#define CHECKS_PER_HOST    6                   // ping,dns,port,http,ssl,trace
+#define CHECK_TASK_STACK   16384                // HTTPS/SSL checks use mbedTLS (deep stack)
 #define CHECK_TASK_CORE    0   // run checks on core 0 (WiFi/lwIP core); the LVGL
                                // display loop owns core 1, so CPU-heavy checks
                                // (TLS handshake crypto, DNS) can't starve the UI.
@@ -60,13 +68,38 @@
 #define CONNECT_TIMEOUT_MS 4000
 #define HTTP_TIMEOUT_MS    6000
 #define PING_COUNT         3
+#define SSL_WARN_DAYS      14                  // cert-expiry check warns when fewer days remain
 #define TRACE_MAX_HOPS     12
+
+// ---- One-shot on-device TLS self-test (RAM-viability probe) ---------------
+// Runs ONCE from the check task ~3 s after boot: an insecure TLS handshake to this
+// host, reporting the setup/handshake result + largest contiguous free internal block
+// (before→after on success, or at the failure point) on the Alerts/Setup card. This
+// is the empirical check for whether on-device TLS is worth reviving on the current RAM
+// headroom. Set the host to "" to disable the probe.
+#define TLS_SELFTEST_HOST  "example.com"
+#define TLS_SELFTEST_PORT  443
+
+// Heap guard: before starting ANY outbound TLS session (cert check, HTTPS host check,
+// webhook, self-test) the gate requires at least this much *contiguous* free internal
+// RAM. An mbedTLS session needs ~16 KB buffers and ~44 KB total; if the largest free
+// block is already below this, the session would risk an out-of-memory fault, so it's
+// skipped for that cycle and reported as "low mem" instead. Raise/lower to taste.
+#define TLS_MIN_FREE_BLOCK 20480              // 20 KB largest-free-block minimum
+#define TLS_MIN_FREE_TOTAL 49152              // ...AND 48 KB total free internal. A session needs
+                                              // ~44 KB, so this is sized as crash INSURANCE: it
+                                              // only blocks a session that couldn't fit anyway
+                                              // (free below it -> the alloc would fail / fault), so
+                                              // checks that currently succeed are unaffected. Raise
+                                              // it (e.g. 54–60 KB) if you want a guaranteed higher
+                                              // floor and accept TLS checks deferring under load.
 
 // ---- Per-check default intervals (seconds) — mirrors the design spec ------
 #define DEF_INT_PING       30
 #define DEF_INT_DNS        300
 #define DEF_INT_PORT       60
 #define DEF_INT_HTTP       60
+#define DEF_INT_SSL        43200
 #define DEF_INT_TRACE      300
 
 // ---- Web / API ------------------------------------------------------------

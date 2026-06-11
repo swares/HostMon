@@ -13,6 +13,12 @@ namespace UI {
   void buildHealth(lv_obj_t* parent);
   void buildGrid(lv_obj_t* parent);
 
+  // Hosts-grid incremental repaint: update just the status dots / check chips / count
+  // pills in place (no full rebuild → no RGB-underrun flush). gridStructureChanged()
+  // is true when the host set/names/enabled-checks changed and a full rebuild is needed.
+  void updateGrid();
+  bool gridStructureChanged();
+
   // Shared: a touch handler that acks/pauses a host by id (default reason).
   void ackHost(const char* id);
   void pauseHost(const char* id);

@@ -96,21 +96,23 @@ void Scheduler::runOnce(){
     if(!h) continue;
     if(h->status==Status::Paused) continue;          // checks disabled
 
-    bool ranThisHost=false;   // did any check actually fire this scan?
+    bool stateChanged=false;  // did any check's STATE change this scan? (drives the LCD)
     for(uint8_t c=0;c<kCheckCount;c++){
       Check& chk=h->checks[c];
       if(!chk.enabled) continue;
       uint32_t every = chk.every? chk.every : defaultInterval((CheckKind)c);
       if(chk.lastRun!=0 && (nowS-chk.lastRun) < every) continue;
 
-      g_ran++; ranThisHost=true;
+      g_ran++;
       uint32_t cs = millis();
       CheckResult res = Checks::run(*h, (CheckKind)c);   // network-blocking
       if(millis()-cs >= CHECK_SLOW_MS) g_timeouts++;     // ran the full timeout
 
       Store::lock();
       chk.lastRun=nowS;
+      CheckState oldState = chk.state;
       chk.state=res.state;
+      if(res.state != oldState) stateChanged = true;     // only a transition repaints the LCD
       strlcpy(chk.detail,res.detail,sizeof(chk.detail));
       if(res.rttMs){ chk.lastRttMs=res.rttMs; pushHist(chk,res.rttMs); }
       if((CheckKind)c==CheckKind::Ping && res.rttMs) h->rtt=res.rttMs;
@@ -120,10 +122,12 @@ void Scheduler::runOnce(){
 
     char ev[12]; char msg[80];
     Store::lock(); bool fire=evaluateHost(h,ev,sizeof(ev)); strlcpy(msg,h->msg,sizeof(msg)); Store::unlock();
-    // Only repaint the LCD when a check actually ran (i.e. data changed). Marking
-    // dirty every scan forced a full-screen teardown/rebuild every second, which
-    // saturated the PSRAM bus and produced the green RGB-underrun artifacts.
-    if(ranThisHost) Store::markDirty();
+    // Only repaint the LCD when a check's STATE actually changed (a real transition).
+    // A check re-running with the same result changes nothing the LCD shows (dot +
+    // chip colours are by state), so marking dirty every scan just forced needless
+    // full-screen rebuilds — the PSRAM-bus saturation behind the green underrun lines.
+    // (evaluateHost()/recomputeStatus() also marks dirty on a host-status transition.)
+    if(stateChanged) Store::markDirty();
     if(fire) Notifier::notify(*h, ev, msg[0]?msg:"Recovered");   // network I/O, lock released
     vTaskDelay(pdMS_TO_TICKS(20));
   }
@@ -156,6 +160,12 @@ const char* Scheduler::perf(){
 }
 
 static void checkTask(void*){
+  // One-shot TLS viability probe: let Wi-Fi/DNS settle, then attempt a single
+  // insecure handshake and record the result (+ largest-free-block) for the Setup
+  // card. Runs here because mbedTLS needs this task's deep stack. Disabled if
+  // TLS_SELFTEST_HOST is "".
+  vTaskDelay(pdMS_TO_TICKS(3000));
+  Checks::tlsSelfTest();
   for(;;){
     Scheduler::runOnce();
     // tick "seconds since last check" between scans

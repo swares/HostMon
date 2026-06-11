@@ -20,7 +20,6 @@
 
 namespace {
   Preferences   prefs;
-  EmailCfg      g_email;
   WebhookCfg    g_webhook;
   WifiCfg       g_wifi;
   Defaults      g_def;
@@ -49,7 +48,6 @@ static void genPassword(char* out, size_t n){
 
 void Settings::begin(){
   prefs.begin("hostmon", false);
-  loadBlob("email",   &g_email,   sizeof(g_email));
   loadBlob("webhook", &g_webhook, sizeof(g_webhook));
   loadBlob("wifi",    &g_wifi,    sizeof(g_wifi));
   loadBlob("def",     &g_def,     sizeof(g_def));
@@ -69,7 +67,6 @@ void Settings::save(){
   // Fence the NVS (flash) writes behind the LVGL lock so the RGB panel isn't
   // reading PSRAM through a disabled cache during them (see csv.cpp saveHosts).
   Display::lock();
-  prefs.putBytes("email",   &g_email,   sizeof(g_email));
   prefs.putBytes("webhook", &g_webhook, sizeof(g_webhook));
   prefs.putBytes("wifi",    &g_wifi,    sizeof(g_wifi));
   prefs.putBytes("def",     &g_def,     sizeof(g_def));
@@ -77,7 +74,6 @@ void Settings::save(){
   Display::unlock();
 }
 
-EmailCfg&   Settings::email(){ return g_email; }
 WebhookCfg& Settings::webhook(){ return g_webhook; }
 WifiCfg&    Settings::wifi(){ return g_wifi; }
 WebAuthCfg& Settings::auth(){ return g_auth; }

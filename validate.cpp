@@ -80,6 +80,7 @@ bool Valid::interval(long secs, char* e, size_t en){
 }
 bool Valid::checkKind(const char* key, CheckKind& out, char* e, size_t en){
   if(!strcmp(key,"https")||!strcmp(key,"httpsv")){ out=CheckKind::Http; return true; } // secure Http check (+verify)
+  if(!strcmp(key,"sslv")){ out=CheckKind::Ssl; return true; }                          // legacy verify alias -> cert check
   for(uint8_t i=0;i<kCheckCount;i++) if(!strcmp(key, checkMeta((CheckKind)i).key)){ out=(CheckKind)i; return true; }
   setErr(e,en,"unknown check key"); return false;
 }

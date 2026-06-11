@@ -13,4 +13,10 @@ struct CheckResult {
 namespace Checks {
   // Runs one check against a host. Network-blocking; call from the check task.
   CheckResult run(const Host& h, CheckKind k);
+
+  // One-shot on-device TLS viability probe (insecure handshake to TLS_SELFTEST_HOST).
+  // Network-blocking + needs the deep check-task stack; call once from the check task.
+  // Fills a result string (largest-free-block + setup/handshake outcome) for the LCD.
+  void        tlsSelfTest();
+  const char* tlsSelfTestResult();   // "TLS …" line shown on the Alerts/Setup card
 }

@@ -116,7 +116,7 @@ static void getSummary(HTTPRequest* req, HTTPResponse* res){
   JsonObject net=d.createNestedObject("net");
   net["ap"]=WifiPortal::isAP(); net["online"]=WifiPortal::isOnline(); net["ip"]=WifiPortal::ipString();
   net["ssid"]=Settings::wifi().ssid;
-  net["email"]=Settings::email().enabled; net["webhook"]=Settings::webhook().enabled;
+  net["webhook"]=Settings::webhook().enabled;
   sendJson(res,d);
 }
 static void getHosts(HTTPRequest* req, HTTPResponse* res){
@@ -145,22 +145,17 @@ static void getAlerts(HTTPRequest* req, HTTPResponse* res){
   for(int i=0;i<Store::alertCount();i++){ AlertEvt a=Store::alertAt(i); JsonObject o=arr.createNestedObject();
     o["time"]=a.time; o["host"]=a.host; o["check"]=a.check; o["sev"]=checkStateKey(a.sev);
     o["label"]=a.label; o["msg"]=a.msg; o["state"]= a.state==0?"firing":a.state==1?"ack":"resolved";
-    JsonArray ch=o.createNestedArray("channels"); if(a.viaEmail)ch.add("email"); if(a.viaWebhook)ch.add("webhook"); }
+    JsonArray ch=o.createNestedArray("channels"); if(a.viaWebhook)ch.add("webhook"); }
   sendJson(res,d);
 }
 static void getSettings(HTTPRequest* req, HTTPResponse* res){
   if(!Api::authed(req,res)) return;
-  EmailCfg& e=Settings::email(); WebhookCfg& w=Settings::webhook(); Defaults& df=Settings::defaults();
+  WebhookCfg& w=Settings::webhook(); Defaults& df=Settings::defaults();
   DynamicJsonDocument d(JSON_DOC_MED);
   JsonObject jd=d.createNestedObject("defaults"); JsonArray iv=jd.createNestedArray("interval");
   for(int i=0;i<kCheckCount;i++) iv.add(df.interval[i]);
   jd["fails"]=df.failsBeforeAlert; jd["lcdHome"]=String(df.lcdHome);
   jd["renotify"]=df.renotify; jd["renotifyEvery"]=df.renotifyEvery;
-  JsonObject je=d.createNestedObject("email");
-  je["enabled"]=e.enabled; je["server"]=String(e.host)+":"+e.port; je["host"]=e.host; je["port"]=e.port;
-  je["from"]=e.from; je["to"]=e.to; je["lastTest"]=e.lastTest; je["ok"]=e.lastOk;
-  JsonArray ew=je.createNestedArray("when");
-  if(e.whenDown)ew.add("down"); if(e.whenWarn)ew.add("warn"); if(e.whenRecovered)ew.add("recovered");
   JsonObject jw=d.createNestedObject("webhook");
   jw["enabled"]=w.enabled; jw["url"]=w.url; jw["method"]=w.method; jw["header"]=w.header; jw["last"]=w.last; jw["ok"]=w.lastOk;
   JsonArray ww=jw.createNestedArray("when");
@@ -262,23 +257,6 @@ static void postHostDelete(HTTPRequest* req, HTTPResponse* res){
   if(!Store::removeById(id)){ sendErr(res,404,"no such host"); return; }
   Store::recount(); Csv::saveHosts(HOSTS_CSV_PATH); sendOk(res);
 }
-static void postEmail(HTTPRequest* req, HTTPResponse* res){
-  if(!Api::authed(req,res)) return; DynamicJsonDocument d(JSON_DOC_MED); if(!body(req,res,d)) return;
-  EmailCfg& e=Settings::email(); char err[64];
-  const char* host=d["host"]|e.host; const char* from=d["from"]|e.from; const char* to=d["to"]|e.to;
-  if(strlen(host)>63){ sendErr(res,400,"server too long"); return; }
-  if(!Valid::email(from,err,sizeof(err))){ sendErr(res,400,err); return; }
-  if(!Valid::email(to,err,sizeof(err))){ sendErr(res,400,err); return; }
-  long port=d["port"]|e.port; if(!Valid::inRange(port,1,65535)){ sendErr(res,400,"bad SMTP port"); return; }
-  strlcpy(e.host,host,sizeof(e.host)); e.port=(uint16_t)port; strlcpy(e.from,from,sizeof(e.from)); strlcpy(e.to,to,sizeof(e.to));
-  if(d.containsKey("user")) strlcpy(e.user,d["user"]|"",sizeof(e.user));
-  if(d.containsKey("pass")) strlcpy(e.pass,d["pass"]|"",sizeof(e.pass));
-  if(d.containsKey("enabled")) e.enabled=d["enabled"];
-  if(d.containsKey("when")){ e.whenDown=e.whenWarn=e.whenRecovered=false;
-    for(const char* w : d["when"].as<JsonArray>()){ if(!strcmp(w,"down"))e.whenDown=true; else if(!strcmp(w,"warn"))e.whenWarn=true;
-      else if(!strcmp(w,"recovered"))e.whenRecovered=true; } }
-  Settings::save(); sendOk(res);
-}
 static void postWebhook(HTTPRequest* req, HTTPResponse* res){
   if(!Api::authed(req,res)) return; DynamicJsonDocument d(JSON_DOC_MED); if(!body(req,res,d)) return;
   WebhookCfg& w=Settings::webhook(); char err[64];
@@ -315,8 +293,6 @@ static void postAuth(HTTPRequest* req, HTTPResponse* res){
   if(*pass){ size_t pl=strlen(pass); if(pl<8||pl>39){ sendErr(res,400,"password must be 8-39 chars"); return; } strlcpy(a.pass,pass,sizeof(a.pass)); a.autoGen=false; }
   strlcpy(a.user,user,sizeof(a.user)); Settings::save(); sendOk(res);
 }
-static void testEmail(HTTPRequest* req, HTTPResponse* res){ if(!Api::authed(req,res)) return;
-  char e[80]; if(Notifier::testEmail(e,sizeof(e))) sendOk(res); else sendErr(res,502,e); }
 static void testWebhook(HTTPRequest* req, HTTPResponse* res){ if(!Api::authed(req,res)) return;
   char e[80]; if(Notifier::testWebhook(e,sizeof(e))) sendOk(res); else sendErr(res,502,e); }
 static void sdReload(HTTPRequest* req, HTTPResponse* res){ if(!Api::authed(req,res)) return;
@@ -378,11 +354,9 @@ void Api::registerRoutes(HTTPServer* s){
   s->registerNode(new ResourceNode("/api/host/interval","POST",&postInterval));
   s->registerNode(new ResourceNode("/api/host/delete","POST",&postHostDelete));
   s->registerNode(new ResourceNode("/api/host","POST",&postHost));
-  s->registerNode(new ResourceNode("/api/settings/email","POST",&postEmail));
   s->registerNode(new ResourceNode("/api/settings/webhook","POST",&postWebhook));
   s->registerNode(new ResourceNode("/api/settings/defaults","POST",&postDefaults));
   s->registerNode(new ResourceNode("/api/settings/auth","POST",&postAuth));
-  s->registerNode(new ResourceNode("/api/test/email","POST",&testEmail));
   s->registerNode(new ResourceNode("/api/test/webhook","POST",&testWebhook));
   s->registerNode(new ResourceNode("/api/sd/reload","POST",&sdReload));
   s->registerNode(new ResourceNode("/api/wifi/join","POST",&wifiJoin));

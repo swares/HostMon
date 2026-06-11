@@ -1,18 +1,19 @@
-/* notifier.cpp — SMTP + webhook delivery with routing rules. */
+/* notifier.cpp — webhook (HTTPS/HTTP) alert delivery with routing rules.
+ * (Email/SMTP was removed: ESP Mail Client's TLS footprint exceeded this board's
+ *  free internal RAM. Route alerts via webhook to a downstream relay if you want
+ *  email — see README §10.) */
 #include "notifier.h"
 #include "config.h"
 #include "settings.h"
 #include "store.h"
 #include "model.h"                  // CheckKind / CheckState / checkMeta
+#include "tls_gate.h"               // serialize outbound TLS across the check + web tasks
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <ESP_Mail_Client.h>
 #include <ArduinoJson.h>
 
 namespace {
-  SMTPSession smtp;
-
   void labelFor(const char* event, char* out, size_t n){
     if(!strcmp(event,"host.down")) strlcpy(out,"DOWN",n);
     else if(!strcmp(event,"host.warn")) strlcpy(out,"WARN",n);
@@ -39,6 +40,12 @@ namespace {
     WebhookCfg& w=Settings::webhook();
     if(!w.enabled || !w.url[0]){ if(err) strlcpy(err,"webhook disabled",en); return false; }
     bool https = strncmp(w.url,"https://",8)==0;
+    // Only ONE outbound TLS session can fit in internal RAM at a time, and a "Send
+    // test" webhook (web task) can race a cert check / alert send (check task), so
+    // HTTPS sends take the global TLS gate for their duration. Plain-HTTP webhooks
+    // don't engage it. Block up to 15 s for the slot, else report busy.
+    TlsGate::Lock tls(https, 15000);
+    if(!tls.ok()){ if(err) strlcpy(err, tls.lowMem()?"low memory — webhook deferred":"TLS busy, retry", en); return false; }
     // HTTPS webhooks are delivered insecurely (cert not validated): on-device
     // certificate verification isn't viable on this board — mbedTLS can't get its
     // session buffers from the free internal heap. See README §7.
@@ -57,31 +64,9 @@ namespace {
     if(!w.lastOk && err) snprintf(err,en,"webhook HTTP %d",code);
     return w.lastOk;
   }
-
-  bool sendEmail(const char* subject, const char* body, char* err, size_t en){
-    EmailCfg& e=Settings::email();
-    if(!e.enabled || !e.host[0] || !e.to[0]){ if(err) strlcpy(err,"email disabled",en); return false; }
-    // The mail library manages its own TLS. On-device certificate verification isn't
-    // viable on this board (mbedTLS session buffers exceed the free internal heap),
-    // so the SMTP server certificate is not pre-validated. See README §7.
-    Session_Config cfg;
-    cfg.server.host_name = e.host; cfg.server.port = e.port;
-    cfg.login.email = e.user[0]? e.user : e.from; cfg.login.password = e.pass;
-    cfg.login.user_domain = "";
-    SMTP_Message msg;
-    msg.sender.name = "Host Monitor"; msg.sender.email = e.from;
-    msg.subject = subject; msg.addRecipient("", e.to);
-    msg.text.content = body; msg.text.charSet="utf-8";
-    if(!smtp.connect(&cfg)){ if(err) strlcpy(err,"SMTP connect failed",en); return false; }
-    bool ok = MailClient.sendMail(&smtp, &msg);
-    smtp.closeSession();
-    e.lastOk=ok; strlcpy(e.lastTest,"now",sizeof(e.lastTest));
-    if(!ok && err) strlcpy(err,smtp.errorReason().c_str(),en);
-    return ok;
-  }
 }
 
-void Notifier::begin(){ smtp.debug(0); MailClient.networkReconnect(true); }
+void Notifier::begin(){}
 
 void Notifier::buildPayload(const Host& h, const char* event, const char* msg, char* out, size_t n){
   char label[12]; labelFor(event,label,sizeof(label));
@@ -96,23 +81,20 @@ void Notifier::buildPayload(const Host& h, const char* event, const char* msg, c
 }
 
 void Notifier::notify(const Host& h, const char* event, const char* msg){
-  // Decide channels from settings "send when" + per-host routing.
-  EmailCfg& e=Settings::email(); WebhookCfg& w=Settings::webhook();
+  // Decide delivery from settings "send when" + per-host routing.
+  WebhookCfg& w=Settings::webhook();
   bool isDown=!strcmp(event,"host.down"), isWarn=!strcmp(event,"host.warn"), isUp=!strcmp(event,"host.up");
 
-  bool email = e.enabled && ((isDown&&e.whenDown)||(isWarn&&e.whenWarn)||(isUp&&e.whenRecovered));
   bool hook  = w.enabled && ((isDown&&w.whenDown)||(isWarn&&w.whenWarn)||(isUp&&w.whenRecovered));
-  if(isDown && !h.alertDown){ email=hook=false; }
-  if(isWarn && !h.alertWarn){ email=hook=false; }
-  if(isUp   && !h.alertRecovered){ email=hook=false; }
+  if(isDown && !h.alertDown)      hook=false;
+  if(isWarn && !h.alertWarn)      hook=false;
+  if(isUp   && !h.alertRecovered) hook=false;
 
   char payload[512]; buildPayload(h,event,msg,payload,sizeof(payload));
   char label[12]; labelFor(event,label,sizeof(label));
   char err[64];
 
-  bool eOk=false,wOk=false;
-  if(email){ char subj[96]; snprintf(subj,sizeof(subj),"[%s] %s — %s",DEVICE_NAME,label,h.name);
-             eOk=sendEmail(subj,payload,err,sizeof(err)); }
+  bool wOk=false;
   if(hook){ wOk=sendWebhook(payload,err,sizeof(err)); }
 
   // Record in the alert ring buffer for the dashboard/LCD.
@@ -121,14 +103,11 @@ void Notifier::notify(const Host& h, const char* event, const char* msg){
   failingChecks(h,a.check,sizeof(a.check));
   a.sev=sevFor(event); strlcpy(a.label,label,sizeof(a.label));
   strlcpy(a.msg,msg,sizeof(a.msg)); a.state= isUp?2:0;
-  a.viaEmail=eOk; a.viaWebhook=wOk; a.at=millis();
+  a.viaEmail=false; a.viaWebhook=wOk; a.at=millis();
   Store::pushAlert(a);
   Settings::save();
 }
 
-bool Notifier::testEmail(char* err, size_t en){
-  return sendEmail("Host Monitor test", "This is a test alert from Host Monitor.", err, en);
-}
 bool Notifier::testWebhook(char* err, size_t en){
   char payload[256];
   snprintf(payload,sizeof(payload),

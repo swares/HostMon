@@ -1,9 +1,9 @@
 # Host Monitor — Waveshare ESP32-S3-Touch-LCD-4.3
 
 A self-hosted network-monitoring appliance for the **Waveshare ESP32-S3-Touch-LCD-4.3**
-(800×480 parallel-RGB capacitive touch panel). It runs five pluggable checks against a
+(800×480 parallel-RGB capacitive touch panel). It runs six pluggable checks against a
 list of hosts, shows fleet health on the on-device LCD, and serves a **web dashboard
-over plain HTTP (behind HTTP Basic Auth)** straight from firmware. It supports email + webhook
+over plain HTTP (behind HTTP Basic Auth)** straight from firmware. It supports webhook
 alerting and pause / acknowledge governance with required reasons.
 
 Everything persists **on-board** — no SD card and no separate data upload: the host list
@@ -11,7 +11,7 @@ lives on the flash filesystem (LittleFS) and the dashboard assets are compiled i
 firmware. This is an **Arduino IDE** project (a flat sketch — Arduino builds every
 `.ino/.cpp/.h` in the folder).
 
-Firmware version: **1.4.3**.
+Firmware version: **1.4.18**.
 
 ---
 
@@ -63,7 +63,9 @@ Built/tested with these versions (Library Manager unless noted):
 | **esp-lib-utils** (Espressif) | `0.3.0` | Dependency of the panel stack. |
 | **ESP32_IDF5_HTTPS_Server** | `1.1.1` | Used only for its **HTTP** server + Basic Auth (`HTTPServer`). An IDF5-compatible fork of `fhessel/esp32_https_server` (the original doesn't build on core 3.x). The library's HTTPS/TLS classes are **not used** — on-device TLS isn't viable here (§7). |
 | **ArduinoJson** | `7.4.x` | JSON API. (Code uses the `DynamicJsonDocument` API, which still works in v7.) |
-| **ESP Mail Client** (mobizt) | `3.4.24` | SMTP email alerts. |
+
+> **ESP Mail Client is no longer required** — SMTP/email alerting was removed (its TLS
+> footprint exceeded this board's free internal RAM; §10/§16). You can uninstall it.
 
 `LittleFS`, `WiFi`, `HTTPClient`, `WiFiClientSecure`, `ESPmDNS`, `Preferences`, the
 esp_ping/lwIP stack, and **mbedTLS** ship with the core. (mbedTLS is pulled in by
@@ -98,7 +100,7 @@ board selected, `Board::init()` fails and the screen stays black (backlight on).
 - **Flash Size:** **8MB (64Mb)** — or 16MB if your board has it
 - **Partition Scheme:** **Custom** → use the bundled **`partitions.csv`** (5 MB app /
   ~2.9 MB LittleFS / coredump, 8 MB total). The app build is large (LVGL + HTTP server +
-  mbedTLS + ESP Mail Client + Display Panel), so a normal "default" scheme won't fit.
+  mbedTLS + Display Panel), so a normal "default" scheme won't fit.
 - **Upload Speed:** 921600
 - **USB CDC On Boot:** Enabled (for the serial log; note serial is unreliable once the
   RGB panel + Wi-Fi are both live — the device surfaces diagnostics on the LCD instead)
@@ -185,26 +187,25 @@ appliance:
   speaks HTTP behind it.
 - Or keep the device on a **trusted / isolated VLAN** and accept plain HTTP there.
 
-### The SSL/TLS-expiry check was removed (same RAM limit)
-The standalone **SSL/TLS cert-expiry check** has been **removed** for the same reason
-on-device HTTPS was: validating a remote certificate requires an outbound mbedTLS
-handshake, and `mbedtls_ssl_setup()` can't allocate its ~16–32 KB of session buffers
-from the free internal heap on this board (the failure shows up as `TLS fail -0x0000` /
-a low free-heap readout). It worked early in the project when more RAM was free, but no
-longer does reliably, so it's gone rather than left as a check that always fails.
+### Outbound TLS: one insecure session at a time
+A *single* outbound mbedTLS session (~44 KB here, peak) does fit, now that internal RAM
+was reclaimed (smaller `MAX_HOSTS`, the removed cert cruft) — confirmed by the boot-time
+self-test (§16). So **one TLS session at a time** is viable, and the firmware uses it for:
 
-Everything that depended on *verifying* a remote certificate on-device was removed for
-the same reason, so nothing in the UI offers an option that can't work:
+- The **SSL cert-expiry check** (§9): an **insecure** handshake that reads the cert's
+  `notAfter` and reports days-to-expiry. Insecure is deliberate — it only needs the date,
+  and the next item explains why *verified* TLS is still off the table.
+- **HTTPS host checks** and the **webhook notifier** (HTTPS POST/PUT): the transport is
+  encrypted but the server certificate is **not validated**.
 
-- The HTTPS **host check** has **no "verify" option** — when a host check is set to
-  HTTPS it connects **insecurely** (accepts any cert) and reports reachability + HTTP
-  status, not certificate trust.
-- The **notifier** delivers **HTTPS webhooks** and **SMTP-over-TLS** without pre-validating
-  the server certificate (there's no "verify TLS cert" toggle in Settings anymore).
+What's still **not** available is **verified** on-device TLS (chain validation against the
+Mozilla CA bundle). Attaching + parsing that bundle costs materially more RAM than the bare
+insecure session that was measured to fit, so there's no "verify" option anywhere in the UI.
+For verified TLS or anything needing *several* concurrent sessions (e.g. a real HTTPS
+dashboard server, where one page load opens multiple connections), use the reverse proxy.
 
-Plain HTTP/HTTPS-insecure host checks, ping, DNS, port, and traceroute are unaffected.
-To monitor certificate expiry or require verified TLS, run that from a host with more
-memory (e.g. a small script on the same Pi/NAS as the reverse proxy).
+Only one session fits, so a global gate (§10) serializes every outbound TLS site across the
+check and web tasks. Ping, DNS, port, and traceroute don't touch TLS at all.
 
 Because the dashboard is HTTP, the Basic-Auth password traverses the network in cleartext
 on an untrusted segment — the proxy or VLAN above is what protects it. (The web password
@@ -222,12 +223,13 @@ it directly. Header row required, one host per line:
 name,address,group,checks,intervals,alerts
 ```
 
-- `checks` — pipe list of enabled checks. Keys: `ping | dns | port | http | https | trace`.
+- `checks` — pipe list of enabled checks. Keys: `ping | dns | port | http | https | ssl | trace`.
   - `http` = HTTP check over plaintext; `https` = over TLS, **always insecure** (accepts
     any/self-signed cert — see §7 for why there's no verified mode).
-  - Legacy tokens from older files are accepted on load and normalised: `httpsv` → `https`,
-    and `ssl`/`sslv` is silently dropped (the row still imports). On the next save the file
-    is rewritten with the current keys.
+  - `ssl` = cert-expiry check (insecure TLS handshake, reads `notAfter`).
+  - Legacy tokens from older files are accepted on load and normalised: `httpsv` → `https`
+    and `sslv` → `ssl` (verified modes aren't supported — §7). On the next save the file is
+    rewritten with the current keys.
 - `intervals` — optional `key:seconds` overrides, e.g. `ping:30|http:60`
   (seconds must be one of 10, 30, 60, 120, 300, 900, 3600, 21600, 43200, 86400).
 - `alerts` — optional pipe list from `down | warn | recovered` (default `down|recovered`).
@@ -241,7 +243,7 @@ default to **ping only** (enable other checks per host in the dashboard).
 
 ---
 
-## 9. The five checks
+## 9. The six checks
 
 | Check | What it does |
 |---|---|
@@ -249,11 +251,8 @@ default to **ping only** (enable other checks per host in the dashboard).
 | **DNS** | Resolves the hostname and times it. |
 | **Port** | TCP connect to a port (set per host; default 80). Bounded by `CONNECT_TIMEOUT_MS`. |
 | **HTTP** | GET the host, expect 2xx/3xx. Per-host **HTTP/HTTPS** scheme (HTTPS is always insecure — accepts any cert; see §7); HTTPS works on non-standard ports. |
+| **SSL** | TLS handshake → reads the peer-cert `notAfter` and reports days-to-expiry (warns under `SSL_WARN_DAYS`, default 14; DOWN once expired). **Insecure** (accepts any cert — it only reads the expiry date, see §7). Port per host (default 443). One TLS session at a time via the gate (§10). **Use the hostname, not an IP** — the cert is selected by SNI, so an IP gets the server's *default* cert (often a different/older one), not the cert for that name. |
 | **Trace** | Reachability + hop-count estimate from the reply TTL. |
-
-> A standalone **SSL/TLS cert-expiry check** existed in earlier versions but was removed —
-> on-device certificate handshakes exceed this board's free internal RAM (§7). Monitor
-> certificate expiry from a host with more memory instead.
 
 The check engine runs on its own (statically-allocated) task pinned to core 0, away from
 the LVGL display loop on core 1. The **Alerts / Setup** card shows load metrics —
@@ -263,16 +262,37 @@ the LVGL display loop on core 1. The **Alerts / Setup** card shows load metrics 
 
 ## 10. Alerting
 
-Email (SMTP via ESP Mail Client) and webhook (JSON POST/PUT). Per-event routing
-(`down / warn / recovered`, plus `ack / paused` for webhooks) and re-notify. Alert
-payloads are built with ArduinoJson (properly escaped).
+**Webhook only** (JSON POST/PUT). Per-event routing (`down / warn / recovered`, plus
+`ack / paused`) and re-notify. Alert payloads are built with ArduinoJson (properly
+escaped). Each fired alert is also recorded in the on-device ring buffer for the
+dashboard + LCD.
 
-**Outbound TLS:** HTTPS webhooks and SMTP-over-TLS are delivered **without on-device
-certificate verification** — validating a server cert needs an mbedTLS handshake this
-board can't fund from its free internal heap (§7). The transport is still encrypted by
-the mail library / `WiFiClientSecure`, but the server's identity is **not** checked, so
-prefer endpoints reached over a trusted network (or via your reverse proxy). There is no
-"verify TLS cert" toggle in Settings.
+> **Email/SMTP was removed.** ESP Mail Client's TLS session needed more internal RAM than
+> this board can spare (it was the heaviest TLS user — see §16). If you want email, point a
+> webhook at a downstream relay that emails for you (ntfy, Home Assistant, a webhook→email
+> gateway, Zapier, etc.). The whole alert engine — routing, re-notify, ring buffer,
+> pause/ack governance — is unchanged; only the SMTP delivery channel is gone.
+
+**Outbound TLS:** HTTPS webhooks are delivered **without on-device certificate
+verification** — validating a server cert needs the CA bundle, which costs more RAM than
+this board can spare (§7). The transport is still encrypted by `WiFiClientSecure`, but the
+server's identity is **not** checked, so prefer endpoints reached over a trusted network
+(or via your reverse proxy). There is no "verify TLS cert" toggle.
+
+**One TLS session at a time, with a heap guard.** Only one mbedTLS session (~44 KB peak)
+fits in internal RAM, and outbound TLS can originate from two tasks — the check engine
+(HTTPS host checks, the SSL cert check, the boot self-test, alert webhooks) and the web
+server (the dashboard's "Send test"). A global mutex (`tls_gate.*`) serializes them so two
+sessions can never allocate at once. **Before** starting a session the gate also checks the
+heap: the largest free *contiguous* block must be ≥ `TLS_MIN_FREE_BLOCK` (default 20 KB) **and**
+total free internal RAM ≥ `TLS_MIN_FREE_TOTAL` (default 48 KB, sized just above a session's
+~44 KB so it only blocks one that couldn't fit anyway). If RAM is too tight it **skips that
+TLS op for the cycle** rather than risk an out-of-memory fault — reported as `low mem` on the
+LCD / a deferred webhook (re-notify retries later). If a TLS site can't get the slot within
+~15 s it instead reports `tls busy`. Raise `TLS_MIN_FREE_TOTAL` (54–60 KB) for a guaranteed
+higher floor at the cost of TLS checks deferring more under load.
+Watch `min` on the Setup card's RAM gauge as you scale; if it trends toward single digits,
+the guard is what keeps a depleted moment from crashing the device.
 
 ---
 
@@ -283,7 +303,7 @@ GET  /api/summary               fleet counts + device/net + clock
 GET  /api/hosts                 all hosts
 GET  /api/host?id=h1            one host
 GET  /api/alerts                recent alerts
-GET  /api/settings              email/webhook/defaults/device
+GET  /api/settings              webhook/defaults/device
 GET  /api/status                {ap, online, ip, ssid}
 GET  /api/wifi/scan             nearby networks
 POST /api/host/ack              {id, reason, who?}          (reason required)
@@ -293,11 +313,9 @@ POST /api/host/clear            {id}
 POST /api/host/interval         {id, key, every}
 POST /api/host                  {id?, name, addr, group, checks[{key,enabled,every,port,secure}], alerts{}}
 POST /api/host/delete           {id}
-POST /api/settings/email        {host,port,from,to,user?,pass?,enabled,when[]}
 POST /api/settings/webhook      {url,method,header,enabled,when[]}
-POST /api/settings/defaults     {interval[5],fails,lcdHome,renotify,renotifyEvery}
+POST /api/settings/defaults     {interval[6],fails,lcdHome,renotify,renotifyEvery}
 POST /api/settings/auth         {user, pass}                (pass 8-39 chars)
-POST /api/test/email            {}
 POST /api/test/webhook          {}
 POST /api/sd/reload             {}    (reloads hosts from flash)
 POST /api/wifi/join             {ssid, pass}                (saves + reboots)
@@ -345,11 +363,11 @@ it anywhere beyond your LAN.
   the Basic-Auth password and all API traffic cross the network **unencrypted**. Anyone
   who can sniff the segment can read them. This is the single most important reason to keep
   the device on a trusted network or behind a TLS-terminating reverse proxy.
-- **Outbound notifications are unverified TLS.** HTTPS webhooks and SMTP-over-TLS are
-  encrypted but the **server certificate is not checked** (§10), so they're vulnerable to
-  an active man-in-the-middle on an untrusted path.
-- **Secrets are stored in plaintext.** The web password, Wi-Fi PSK, and SMTP password live
-  in **NVS without flash encryption** by default — readable by anyone who can dump the
+- **Outbound webhooks are unverified TLS.** An HTTPS webhook is encrypted but the **server
+  certificate is not checked** (§10), so it's vulnerable to an active man-in-the-middle on
+  an untrusted path.
+- **Secrets are stored in plaintext.** The web password, Wi-Fi PSK, and any webhook token
+  live in **NVS without flash encryption** by default — readable by anyone who can dump the
   flash. Compile-time Wi-Fi credentials (§6) are likewise readable in the firmware image.
 - **The auto-generated web password is shown on the LCD** until you set your own — anyone
   with physical line-of-sight to the screen can read it.
@@ -383,8 +401,8 @@ it anywhere beyond your LAN.
       spare board first.)*
 - [ ] **Bake Wi-Fi credentials** (§6) only on encrypted-flash builds, since the image
       otherwise exposes the PSK.
-- [ ] **Use a dedicated, least-privilege SMTP account / scoped webhook token** so a flash
-      dump doesn't yield reusable high-value credentials.
+- [ ] **Use a scoped/low-privilege webhook token** (in the custom header) so a flash dump
+      doesn't yield a reusable high-value credential.
 - [ ] **Restrict who can see the LCD** until the password has been changed.
 - [ ] **Keep the firmware/toolchain current** (core 3.3.8 + the pinned libraries in §3).
 
@@ -397,7 +415,11 @@ WIFI_SSID_BUILTIN / _PASS_BUILTIN compile-time Wi-Fi creds (skip AP)
 NTP_TZ / NTP_SERVER_1/2           timezone (POSIX TZ) + NTP servers
 CONNECT_TIMEOUT_MS / HTTP_TIMEOUT_MS   check timeouts
 CHECK_TASK_STACK / CHECK_TASK_CORE     check engine task
-LCD_REFRESH_MS                    on-device data refresh cadence
+TLS_MIN_FREE_BLOCK / _TOTAL       largest-block + total-free floors to allow a TLS session (heap guard)
+TLS_SELFTEST_HOST / _PORT         boot TLS self-test target ("" disables)
+LCD_REFRESH_MS                    UI tick (clock + gauge in-place updates)
+LCD_REBUILD_MS                    min interval between full screen rebuilds (RGB-underrun fix)
+MAX_HOSTS                         host capacity (~1 KB internal RAM each)
 HTTP_PORT                         dashboard port (default 80)
 WEB_USER_DEFAULT / WEB_PASS_DEFAULT    seed only; replaced by the random password
 ```
@@ -415,9 +437,10 @@ validate.h/.cpp     input validation (CSV + API)
 csv.h/.cpp          LittleFS hosts.csv read/write (validated) + storage diag
 settings.h/.cpp     NVS-persisted config, first-boot password gen, NTP/runtime time
 rtc.h/.cpp          PCF85063 driver — DISABLED in this build (single-I2C-driver)
-checks.h/.cpp       the five checks (ping/dns/port/http/trace)
+checks.h/.cpp       the six checks (ping/dns/port/http/ssl/trace) + insecure cert probe + TLS self-test
 scheduler.h/.cpp    per-check interval engine + status/alert transitions + load metrics
-notifier.h/.cpp     SMTP email + webhook delivery + routing (outbound TLS unverified)
+notifier.h/.cpp     webhook (HTTPS/HTTP) delivery + routing (outbound TLS unverified; email removed)
+tls_gate.h/.cpp     one-TLS-session-at-a-time mutex + heap guard (skip TLS when RAM tight)
 wifi_portal.h/.cpp  STA join (saved or compile-time creds) + captive 'HostMon' AP + mDNS
 webserver.h/.cpp    plain-HTTP dashboard/API server (task-pumped)
                     (certs.h/.cpp + cert_embedded.h removed — on-device TLS dropped)
@@ -427,7 +450,7 @@ display.h/.cpp      CH422G→RGB→GT911→LVGL bring-up (PSRAM draw buffers)
 theme.h/.cpp        LVGL design tokens + widget factories
 ui.h/.cpp           LCD root + 3-tab nav (Home / Hosts / Alerts·Setup) + refresh loop
 screen_health.cpp   LCD Home (donut + needs-attention)
-screen_grid.cpp     LCD Hosts (scrollable host tiles)
+screen_grid.cpp     LCD Hosts (scrollable host tiles; in-place dot/chip/count repaint)
 lv_conf.h           LVGL v8 config (copy to libraries/)
 partitions.csv      custom 8 MB layout (5 MB app / ~2.9 MB LittleFS)
 data/               dashboard sources (compiled into web_assets.h — not uploaded)
@@ -452,6 +475,19 @@ data/               dashboard sources (compiled into web_assets.h — not upload
 - **Checks stuck "pending" / scheduler not started** → should not occur in current
   firmware (the check task uses a static stack and the scheduler starts inline); if seen,
   read the Setup card's `sched …` line and the `fs …` storage line for diagnosis.
+- **Green flickering lines on the left edge** → RGB DMA underrun during a full screen
+  rebuild (the PSRAM draw-buffer → framebuffer copy). Mostly designed out: the scheduler
+  only marks the screen dirty on a real **state transition** (not every check run), and
+  the Hosts grid repaints just the changed **dots/chips/counts in place** rather than
+  rebuilding — so routine updates never do the heavy flush. A full rebuild only happens
+  on a *structural* change (host added/removed/renamed/checks toggled) or a tab switch,
+  coalesced to `LCD_REBUILD_MS` (default 5 s). If you still catch a line during one of
+  those, raise `LCD_REBUILD_MS` (6000–8000). (Moving the LVGL draw buffer into internal
+  SRAM would also help, but a useful ~16–32 KB buffer would collide with on-device TLS —
+  this board can't do both.)
+- **SSL check says "expired" for a valid cert** → you configured the host as an **IP**.
+  The cert is chosen by SNI, so an IP gets the server's default (often older/expired) cert.
+  Use the **hostname** (§9).
 
 ---
 
@@ -462,21 +498,39 @@ or platform constraints on this board. Almost all of them trace to two roots: **
 free internal RAM for on-device TLS**, and the panel stack's **single-I²C-driver**
 requirement. Recorded here so the gaps — and *why* they exist — are explicit.
 
-### On-device TLS — all blocked by the same RAM limit
-An mbedTLS session needs ~16–32 KB of *contiguous internal* RAM, which the chip can't spare
-alongside Wi-Fi + the check engine + the web server. `mbedtls_ssl_setup()` fails to
-allocate its buffers (surfaces as `ERR_CONNECTION_RESET` / `TLS fail -0x0000`). Everything
-below was cut for this one reason — see §7.
+### On-device TLS — limited by RAM (one insecure session only)
+An mbedTLS session needs ~16–44 KB of *contiguous internal* RAM. After reclaiming RAM
+(smaller `MAX_HOSTS`, removing the cert/HTTPS-server cruft) the board can run **one insecure
+session at a time** — confirmed by the self-test below — so the **cert-expiry check** and
+insecure HTTPS host checks/notifications work, serialized by the TLS gate (§10). What it
+**still can't** do is run **multiple concurrent** sessions (a real HTTPS dashboard server,
+where one page load opens several connections) or **verified** TLS (CA-bundle chain
+validation, which costs materially more RAM). Those remain reverse-proxy territory — see §7.
+
+> **How this was settled — the live gauge + self-test** on the **Alerts / Setup** card:
+> `RAM free Nk · largest Nk · min Nk` (updated every second), plus a one-shot insecure
+> handshake to `TLS_SELFTEST_HOST` (`config.h`) ~3 s after boot reporting `TLS … OK(insec)
+> … lb A->B` (largest free block before→during the session). It came back **OK** with ~23 KB
+> still free at the session's peak, which green-lit restoring the cert-expiry check. Keep an
+> eye on `largest`/`min` if you add hosts; `MAX_HOSTS` frees ~1 KB/host of the RAM TLS draws
+> from. Set `TLS_SELFTEST_HOST` to `""` to disable the boot probe.
 
 - **HTTPS for the dashboard.** The TLS server, runtime cert provisioning, and the embedded
-  cert/key were removed; the dashboard is **plain HTTP only**. Use a reverse proxy / VLAN.
+  cert/key were removed; the dashboard is **plain HTTP only** (a page load needs several
+  concurrent TLS sessions, which don't fit). Use a reverse proxy / VLAN.
 - **Self-signed cert + trust-on-first-use (TOFU).** Wired up as a lighter alternative, then
   abandoned — handshakes reset regardless of cert type (tested both RSA and ECDSA).
-- **SSL/TLS certificate-expiry check.** Removed entirely (was one of the host checks).
+- **SSL/TLS certificate-expiry check** — *removed in 1.4.3, **restored (insecure) in 1.4.8***
+  once the self-test confirmed a single session fits. Reads the cert `notAfter`; does **not**
+  validate the chain (verified mode would need the CA bundle = more RAM than measured to fit).
 - **HTTPS host-check "verify" option.** Removed — HTTPS host checks are **insecure-only**
   (reachability + status, not certificate trust).
+- **Email / SMTP alerting (ESP Mail Client)** — *removed in 1.4.9*. It was the heaviest TLS
+  user (its own larger TLS stack), the one path the self-test couldn't vouch for; dropping
+  it raises the worst-case internal-RAM floor. **Webhook** is the only delivery channel now
+  — route it to a downstream relay if you need email. The library can be uninstalled.
 - **Notifier outbound TLS verification** (HTTPS webhooks, SMTP-over-465 against the CA
-  bundle). Removed — notifications are encrypted but the server identity is **not** checked.
+  bundle). Removed — the webhook is encrypted but the server identity is **not** checked.
 - **`cert<14d` alert routing.** Collateral — its only trigger was the removed cert check.
 - **Verified HTTPS via `HTTPClient::setCACertBundle()`.** Abandoned earlier for a separate
   reason: the core CA bundle couldn't be referenced by symbol on this core (link error
@@ -502,7 +556,9 @@ below was cut for this one reason — see §7.
 ### Tried and reverted (memory pressure)
 - **Internal-RAM LVGL draw buffers.** Attempted to fix the green RGB flicker, but it
   consumed enough internal heap to make the check task fail to create. Reverted to **PSRAM**
-  draw buffers; the flicker was instead fixed with conditional `markDirty`.
+  draw buffers; the flicker was instead designed out in firmware — mark dirty only on a
+  state transition, repaint the Hosts grid in place, and coalesce any full rebuild to
+  `LCD_REBUILD_MS` (§15).
 
 ### Platform pins (constraints accepted, not lost features)
 - **LVGL stays on v8.4** — v9 won't compile against this code.

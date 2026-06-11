@@ -5,21 +5,8 @@
 #include <Arduino.h>
 #include "config.h"
 
-struct EmailCfg {
-  bool   enabled=false;
-  char   host[64]="smtp.fastmail.com";
-  uint16_t port=465;
-  char   user[64]="";
-  char   pass[64]="";
-  char   from[64]="bot@home.net";
-  char   to[64]="me@home.net";
-  bool   whenDown=true, whenWarn=false, whenRecovered=true, whenCert=true;
-  bool   verify=true;           // DEPRECATED — on-device TLS cert verify removed (§7);
-                                // field kept only so the NVS blob layout is unchanged.
-  char   lastTest[24]="never";
-  bool   lastOk=false;
-};
-
+// Email/SMTP was removed (ESP Mail Client's TLS footprint didn't fit this board's
+// internal RAM). Webhook is the only delivery channel now — route to a relay for email.
 struct WebhookCfg {
   bool   enabled=false;
   char   url[160]="";
@@ -46,8 +33,8 @@ struct WebAuthCfg {
 };
 
 struct Defaults {
-  uint32_t interval[5 /*kCheckCount*/] = { DEF_INT_PING,DEF_INT_DNS,DEF_INT_PORT,
-                                           DEF_INT_HTTP,DEF_INT_TRACE };
+  uint32_t interval[6 /*kCheckCount*/] = { DEF_INT_PING,DEF_INT_DNS,DEF_INT_PORT,
+                                           DEF_INT_HTTP,DEF_INT_SSL,DEF_INT_TRACE };
   uint8_t  failsBeforeAlert = DEFAULT_FAILS_BEFORE_ALERT;
   char     lcdHome = 'A';        // 'A' Health, 'B' Grid
   bool     renotify = RENOTIFY_DEFAULT;
@@ -58,7 +45,6 @@ namespace Settings {
   void begin();
   void save();
 
-  EmailCfg&   email();
   WebhookCfg& webhook();
   WifiCfg&    wifi();
   WebAuthCfg& auth();

@@ -27,6 +27,7 @@
 #include "notifier.h"
 #include "wifi_portal.h"
 #include "webserver.h"
+#include "tls_gate.h"
 #include "ui.h"
 
 // setup() runs on the Arduino loopTask. The big stack was only for the on-device
@@ -63,6 +64,8 @@ void setup() {
   esp_task_wdt_deinit();   // unsubscribes idle tasks + tears down the TWDT
 
   Settings::begin();     // NVS config
+  TlsGate::begin();      // create the one-TLS-session-at-a-time mutex before any task
+                         // that can start a TLS handshake (web server / check engine)
 
   // Seed the clock from the external RTC FIRST, while Wire (new I2C driver) still
   // owns the bus. startClock() releases the bus afterward so the display panel's

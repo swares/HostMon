@@ -8,7 +8,9 @@
 #include "wifi_portal.h"
 #include "webserver.h"
 #include "scheduler.h"
+#include "checks.h"        // Checks::tlsSelfTestResult() for the on-screen TLS probe
 #include "csv.h"           // Storage::diag() for the on-screen FS readout
+#include <esp_heap_caps.h> // live internal-heap readout (TLS-viability gauge)
 
 // Defined in HostMonitor.ino (RTC_NOINIT). Declared at file scope so it resolves
 // to the global symbol, not one inside this translation unit's anon namespace.
@@ -18,9 +20,25 @@ namespace {
   lv_obj_t* g_content=nullptr;     // screen content area (above the nav)
   lv_obj_t* g_nav=nullptr;
   lv_obj_t* g_clockLbl=nullptr;    // current screen's clock label (for in-place time updates)
+  lv_obj_t* g_heapLbl=nullptr;     // Setup card's live heap readout (updated each refresh tick)
+  lv_obj_t* g_tlsLbl=nullptr;      // Setup card's one-shot TLS self-test result line
   char      g_active='A';
   uint32_t  g_lastRefresh=0;
+  uint32_t  g_lastRebuild=0;       // throttles full screen rebuilds (RGB-underrun fix)
   char      g_lastClock[8]={0};
+
+  // Live internal-RAM readout. The number that decides whether on-device TLS is even
+  // worth attempting is `largest` — mbedtls_ssl_setup() needs ~16 KB *contiguous* twice
+  // (IN+OUT buffers), so a largest free block below ~16 KB means TLS can't even start,
+  // and ~32 KB+ is needed for comfortable headroom. `free` is total internal heap;
+  // `min` is the low-water mark since boot (worst case seen under load).
+  void heapLine(char* buf, size_t n){
+    unsigned freeI = (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    unsigned lblk  = (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+    unsigned minI  = (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    snprintf(buf, n, "RAM free %uk · largest %uk · min %uk  (TLS needs ~16-32k largest)",
+             freeI/1024, lblk/1024, minI/1024);
+  }
 
   void navEvent(lv_event_t* e){
     intptr_t which=(intptr_t)lv_event_get_user_data(e);
@@ -139,6 +157,25 @@ namespace {
     lv_obj_set_style_text_color(fg, Theme::teal(),0);
     lv_obj_set_style_text_font(fg,&lv_font_montserrat_12,0);
     lv_obj_set_style_pad_top(fg,4,0);
+
+    // Live internal-RAM gauge — updated in place every refresh tick (see UI::loop).
+    // `largest` is the figure that decides whether on-device TLS is worth retrying.
+    char hbuf[88]; heapLine(hbuf,sizeof(hbuf));
+    lv_obj_t* hg=lv_label_create(card);
+    lv_label_set_text(hg, hbuf);
+    lv_obj_set_style_text_color(hg, Theme::tx(),0);
+    lv_obj_set_style_text_font(hg,&lv_font_montserrat_12,0);
+    lv_obj_set_style_pad_top(hg,4,0);
+    g_heapLbl=hg;                    // register for in-place live updates
+
+    // One-shot TLS self-test result (insecure handshake to TLS_SELFTEST_HOST).
+    // "pending…" until the probe runs ~3 s after boot; then OK/FAIL + largest-block.
+    lv_obj_t* tg=lv_label_create(card);
+    lv_label_set_text(tg, Checks::tlsSelfTestResult());
+    lv_obj_set_style_text_color(tg, Theme::teal(),0);
+    lv_obj_set_style_text_font(tg,&lv_font_montserrat_12,0);
+    lv_obj_set_style_pad_top(tg,4,0);
+    g_tlsLbl=tg;                     // refreshed in place until the probe completes
   }
 
   void buildNav(lv_obj_t* parent){
@@ -172,6 +209,8 @@ namespace {
     if(!g_content) return;
     lv_obj_clean(g_content);
     g_clockLbl=nullptr;              // old label is gone; the screen re-registers its own
+    g_heapLbl=nullptr;              // ditto: only the Setup card recreates + registers it
+    g_tlsLbl=nullptr;
     if(g_active=='A')      UI::buildHealth(g_content);
     else if(g_active=='B') UI::buildGrid(g_content);
     else                   buildPlaceholder(g_content, "Alerts / Setup");
@@ -209,17 +248,41 @@ void UI::loop(){
   uint32_t now=millis();
   if(now-g_lastRefresh < LCD_REFRESH_MS) return;
   g_lastRefresh=now;
+
+  // A full rebuild (tear down + recreate every widget) is the expensive event — its
+  // PSRAM draw-buffer -> PSRAM framebuffer copy momentarily starves the RGB DMA and
+  // shows as green underrun lines on the left edge. So:
+  //   • On the Hosts grid, when only host/check STATES changed (the host set is the
+  //     same), repaint just the affected dots/chips/count-pills IN PLACE — small flush,
+  //     no artifact, and it can run every tick.
+  //   • A structural change (host added/removed/renamed/checks toggled), or the
+  //     Home/Setup tab, still needs a full rebuild — coalesced to LCD_REBUILD_MS.
+  if(Store::consumeDirty()){
+    if(g_active=='B' && !UI::gridStructureChanged()){
+      Display::lock(); UI::updateGrid(); Display::unlock();
+    } else if(now - g_lastRebuild >= LCD_REBUILD_MS){
+      g_lastRebuild = now;
+      strlcpy(g_lastClock, Settings::clockHHMM(), sizeof(g_lastClock));
+      Display::lock(); rebuild(); Display::unlock();
+      return;                         // fresh widgets — skip the in-place updates this tick
+    } else {
+      Store::markDirty();             // rebuild needed but throttled — re-arm for next window
+    }
+  }
+
+  // Cheap in-place updates every tick (NO rebuild): clock + the Setup-card gauges.
+  // These repaint only their own small label area, so they don't trigger the artifact.
   const char* clk=Settings::clockHHMM();
-  bool clockChanged = strcmp(clk,g_lastClock)!=0;
-  bool dirty = Store::consumeDirty();
-  if(dirty){
-    strlcpy(g_lastClock,clk,sizeof(g_lastClock));
-    Display::lock(); rebuild(); Display::unlock();
-  } else if(clockChanged){
-    // Only the time changed: update the clock label in place — no full-screen
-    // rebuild, so the once-a-minute repaint (and its RGB flicker) is gone.
+  if(strcmp(clk,g_lastClock)!=0){
     strlcpy(g_lastClock,clk,sizeof(g_lastClock));
     Display::lock(); if(g_clockLbl) lv_label_set_text(g_clockLbl, clk); Display::unlock();
+  }
+  if(g_heapLbl){                      // null on Home/Hosts tabs — no-op there
+    char hbuf[88]; heapLine(hbuf,sizeof(hbuf));
+    Display::lock(); lv_label_set_text(g_heapLbl, hbuf); Display::unlock();
+  }
+  if(g_tlsLbl){                       // pick up the one-shot TLS self-test result
+    Display::lock(); lv_label_set_text(g_tlsLbl, Checks::tlsSelfTestResult()); Display::unlock();
   }
 }
 

@@ -6,6 +6,7 @@ static const CheckMeta META[kCheckCount] = {
   { "dns",   "DNS resolution", "DNS", DEF_INT_DNS   },
   { "port",  "Port open",      "PRT", DEF_INT_PORT  },
   { "http",  "HTTP code",      "HTP", DEF_INT_HTTP  },
+  { "ssl",   "SSL/TLS expiry", "SSL", DEF_INT_SSL   },
   { "trace", "Traceroute",     "TRC", DEF_INT_TRACE },
 };
 

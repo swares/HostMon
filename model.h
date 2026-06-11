@@ -12,11 +12,11 @@ enum class Status : uint8_t { Down=0, Warn=1, Ack=2, Paused=3, Up=4 };
 enum class CheckState : uint8_t { Down=0, Warn=1, Up=2, Off=3 };
 
 // The built-in check kinds. Order is fixed and mirrors the UI.
-// NOTE: the SSL/TLS-expiry check was removed — on-device TLS (mbedTLS) needs
-// ~16-32 KB of contiguous internal RAM per session, which this board can't spare
-// alongside Wi-Fi + the web server, so the handshake fails. See README §7.
-enum class CheckKind : uint8_t { Ping=0, Dns=1, Port=2, Http=3, Trace=4 };
-static const uint8_t kCheckCount = 5;
+// The SSL/TLS cert-expiry check runs an INSECURE handshake (reads the cert notAfter,
+// accepts any cert) — one outbound TLS session at a time, behind the TLS gate. On-device
+// TLS is viable here only because RAM was reclaimed; see README §7/§16.
+enum class CheckKind : uint8_t { Ping=0, Dns=1, Port=2, Http=3, Ssl=4, Trace=5 };
+static const uint8_t kCheckCount = 6;
 
 struct Check {
   CheckKind  kind;
