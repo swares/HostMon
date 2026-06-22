@@ -255,7 +255,7 @@ footer{position:relative;z-index:1;border-top:1px solid var(--hair);padding:30px
   <button class="menu-btn" id="menuBtn" aria-label="Menu">≡</button>
   <div class="brand">
     <div class="mk">H</div>
-    <div class="nm">Host Monitor<small>v1.4.18 · ESP32-S3 firmware</small></div>
+    <div class="nm">Host Monitor<small>v1.4.22 · ESP32-S3 firmware</small></div>
   </div>
   <div class="links">
     <a href="#install">Install</a>
@@ -506,7 +506,7 @@ body{font-family:'Montserrat',system-ui,sans-serif;background:var(--bg2);color:v
     webhook:{enabled:true,url:'https://hooks.example.com/services/hostmon',method:'POST',
       header:'X-Auth-Token: ••••••••',when:['down','recovered'],ok:true,last:'200 OK · 08:02'},
     sd:{file:'/hosts.csv',count:hosts.length,synced:true},
-    device:{name:'hostmon-01',fw:'1.4.20',ip:'192.168.1.50',ssid:'home-lab-5g',ap:false,user:'admin'},
+    device:{name:'hostmon-01',fw:'1.4.22',ip:'192.168.1.50',ssid:'home-lab-5g',ap:false,user:'admin'},
   };
 
   function clockNow(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
@@ -711,7 +711,7 @@ body{font-family:'Montserrat',system-ui,sans-serif;background:var(--bg2);color:v
         <div class="fcard"><div class="ic">◴</div><h4>On-device LCD</h4><p>800×480 capacitive touch home screens — a health donut, a host grid, and an Alerts·Setup card, on a 3-tab nav with live refresh.</p></div>
         <div class="fcard"><div class="ic">⌘</div><h4>Embedded dashboard</h4><p>The full web UI + JSON REST API are compiled into the firmware (gzip) and served over <strong>plain HTTP</strong>, gated by Basic Auth.</p></div>
         <div class="fcard"><div class="ic">◎</div><h4>Six checks</h4><p>Ping, DNS, Port, HTTP, SSL and Trace — each with its own interval and per-host enable. SSL reads cert-expiry; HTTP has a per-host HTTP/HTTPS scheme.</p></div>
-        <div class="fcard"><div class="ic">✉</div><h4>Alerting</h4><p>Webhook delivery (JSON POST/PUT) routed per host on down / warn / recovered, with re-notify. SMTP email was removed — route a webhook to a relay.</p></div>
+        <div class="fcard"><div class="ic">✉</div><h4>Alerting</h4><p>Webhook delivery (JSON POST/PUT) routed per host on down / warn / recovered, with re-notify. Native or M5Stack-inject payload format. SMTP email was removed — route a webhook to a relay.</p></div>
         <div class="fcard"><div class="ic">⏸</div><h4>Governance</h4><p>Pause and acknowledge with a required reason — kept on the host and surfaced in the UI.</p></div>
         <div class="fcard"><div class="ic">◷</div><h4>Timekeeping</h4><p>Time comes from <strong>NTP</strong>, falling back to a runtime/uptime clock. (The on-board PCF85063 RTC is unused in this build — see Hardware.)</p></div>
       </div>
@@ -1238,7 +1238,7 @@ textarea.input{min-height:78px;resize:vertical;line-height:1.5}
     webhook:{enabled:true,url:'https://hooks.example.com/services/hostmon',method:'POST',
       header:'X-Auth-Token: ••••••••',when:['down','recovered'],ok:true,last:'200 OK · 08:02'},
     sd:{file:'/hosts.csv',count:hosts.length,synced:true},
-    device:{name:'hostmon-01',fw:'1.4.20',ip:'192.168.1.50',ssid:'home-lab-5g',ap:false,user:'admin'},
+    device:{name:'hostmon-01',fw:'1.4.22',ip:'192.168.1.50',ssid:'home-lab-5g',ap:false,user:'admin'},
   };
 
   function clockNow(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
@@ -2379,7 +2379,7 @@ example-blog,example.com,External,<span class="s">ping|dns|port|https|ssl|trace<
       <div class="tbl"><table>
         <thead><tr><th style="width:74px">Method</th><th>Endpoint</th><th>Body</th></tr></thead>
         <tbody>
-          <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/webhook</td><td><span class="mono">{url, method, header, enabled, when[]}</span></td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/webhook</td><td><span class="mono">{url, method, header, enabled, when[], format}</span> — <span class="mono">format</span>: <span class="mono">native | m5inject</span></td></tr>
           <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/defaults</td><td><span class="mono">{interval[6], fails, lcdHome, renotify, renotifyEvery}</span></td></tr>
           <tr><td><span class="method post">POST</span></td><td class="mono">/api/settings/auth</td><td><span class="mono">{user, pass}</span> — pass 8–39 chars</td></tr>
           <tr><td><span class="method post">POST</span></td><td class="mono">/api/test/webhook</td><td><span class="mono">{}</span></td></tr>
@@ -2387,6 +2387,17 @@ example-blog,example.com,External,<span class="s">ping|dns|port|https|ssl|trace<
           <tr><td><span class="method post">POST</span></td><td class="mono">/api/wifi/join</td><td><span class="mono">{ssid, pass}</span> — saves + reboots</td></tr>
         </tbody>
       </table></div>
+
+      <h3>Webhook payload format</h3>
+      <p>Alerts are webhook-only (JSON POST/PUT), routed per host on <span class="mono">down / warn / recovered</span> with re-notify, and built with ArduinoJson so every field is properly escaped. Pick a <strong>payload format</strong> per webhook in <strong>Settings → Webhook → Payload format</strong>:</p>
+      <div class="tbl"><table>
+        <thead><tr><th style="width:120px">Format</th><th>Body</th></tr></thead>
+        <tbody>
+          <tr><td>native <span class="mono">(default)</span></td><td class="mono">{event, host, address, status, check, message, fails, since, device}</td></tr>
+          <tr><td>m5inject</td><td class="mono">{slug:&lt;device&gt;, key:&lt;host&gt;, value:&lt;fails&gt;, severity:"critical|warn|info"}</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note teal"><span class="ic">i</span><div><b>M5Stack integration.</b> <code class="inl">m5inject</code> matches the <b>M5Stack Device Framework</b>'s <code class="inl">POST /api/alerts/inject</code> schema — point the webhook at <code class="inl">https://&lt;m5-ip&gt;/api/alerts/inject</code>, put that device's <code class="inl">X-API-Key: &lt;key&gt;</code> in the <b>Custom header</b> field, and Host Monitor alerts flow straight into its alert engine (LCD / MQTT / SD / buzzer) with no relay. The format is stored in its own NVS key, so switching it never disturbs your saved webhook URL or routing.</div></div>
       <div class="divider"></div>
     </section>
 
@@ -2468,7 +2479,7 @@ example-blog,example.com,External,<span class="s">ping|dns|port|https|ssl|trace<
   </main>
 </div>
 
-<footer>Host Monitor v1.4.18 · Waveshare ESP32-S3-Touch-LCD-4.3 · Arduino IDE project</footer>
+<footer>Host Monitor v1.4.22 · Waveshare ESP32-S3-Touch-LCD-4.3 · Arduino IDE project</footer>
 
 <script>
 // ---- copy buttons ----
