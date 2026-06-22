@@ -48,6 +48,7 @@ namespace Settings {
   void save();
 
   WebhookCfg& webhook();
+  uint8_t&    webhookFormat();   // 0 = native HostMonitor JSON, 1 = M5Stack inject schema
   WifiCfg&    wifi();
   WebAuthCfg& auth();
   Defaults&   defaults();

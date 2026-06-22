@@ -69,11 +69,24 @@ namespace {
 void Notifier::begin(){}
 
 void Notifier::buildPayload(const Host& h, const char* event, const char* msg, char* out, size_t n){
+  // Build with ArduinoJson so every field is properly escaped — a stray quote or
+  // backslash in any value can never break out of the JSON (defence-in-depth).
+  if(Settings::webhookFormat()==1){
+    // M5Stack /api/alerts/inject schema: {slug,key,value,severity}. slug=this device,
+    // key=host name (their key cap is 15), value=consecutive fails, severity from event.
+    char slug[12]; strlcpy(slug, DEVICE_NAME, sizeof(slug));   // their slug cap is 11
+    char key[16];  strlcpy(key,  h.name,      sizeof(key));    // their key cap is 15
+    const char* sev = !strcmp(event,"host.down") ? "critical"
+                    : !strcmp(event,"host.warn") ? "warn" : "info";
+    StaticJsonDocument<192> d;
+    d["slug"]=slug; d["key"]=key; d["value"]=h.fails; d["severity"]=sev;
+    serializeJson(d, out, n);
+    return;
+  }
+  // Native HostMonitor schema.
   char label[12]; labelFor(event,label,sizeof(label));
   char checks[48]; failingChecks(h,checks,sizeof(checks));
   char iso[28]; Settings::isoNow(iso,sizeof(iso));
-  // Build with ArduinoJson so every field is properly escaped — a stray quote or
-  // backslash in any value can never break out of the JSON (defence-in-depth).
   StaticJsonDocument<512> d;
   d["event"]=event; d["host"]=h.name; d["address"]=h.addr; d["status"]=label;
   d["check"]=checks; d["message"]=msg; d["fails"]=h.fails; d["since"]=iso; d["device"]=DEVICE_NAME;
@@ -110,7 +123,11 @@ void Notifier::notify(const Host& h, const char* event, const char* msg){
 
 bool Notifier::testWebhook(char* err, size_t en){
   char payload[256];
-  snprintf(payload,sizeof(payload),
-    "{\"event\":\"test\",\"device\":\"%s\",\"message\":\"Host Monitor webhook test\"}",DEVICE_NAME);
+  if(Settings::webhookFormat()==1)
+    snprintf(payload,sizeof(payload),
+      "{\"slug\":\"%s\",\"key\":\"test\",\"value\":0,\"severity\":\"info\"}",DEVICE_NAME);
+  else
+    snprintf(payload,sizeof(payload),
+      "{\"event\":\"test\",\"device\":\"%s\",\"message\":\"Host Monitor webhook test\"}",DEVICE_NAME);
   return sendWebhook(payload, err, en);
 }

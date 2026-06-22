@@ -158,6 +158,7 @@ static void getSettings(HTTPRequest* req, HTTPResponse* res){
   jd["renotify"]=df.renotify; jd["renotifyEvery"]=df.renotifyEvery;
   JsonObject jw=d.createNestedObject("webhook");
   jw["enabled"]=w.enabled; jw["url"]=w.url; jw["method"]=w.method; jw["header"]=w.header; jw["last"]=w.last; jw["ok"]=w.lastOk;
+  jw["format"]= Settings::webhookFormat()==1 ? "m5inject" : "native";
   JsonArray ww=jw.createNestedArray("when");
   if(w.whenDown)ww.add("down"); if(w.whenWarn)ww.add("warn"); if(w.whenRecovered)ww.add("recovered");
   if(w.whenAck)ww.add("ack"); if(w.whenPaused)ww.add("paused");
@@ -272,6 +273,7 @@ static void postWebhook(HTTPRequest* req, HTTPResponse* res){
     for(const char* x : d["when"].as<JsonArray>()){ if(!strcmp(x,"down"))w.whenDown=true; else if(!strcmp(x,"warn"))w.whenWarn=true;
       else if(!strcmp(x,"recovered"))w.whenRecovered=true; else if(!strcmp(x,"ack"))w.whenAck=true;
       else if(!strcmp(x,"paused"))w.whenPaused=true; } }
+  if(d.containsKey("format")){ const char* f=d["format"]|"native"; Settings::webhookFormat() = !strcmp(f,"m5inject")?1:0; }
   Settings::save(); sendOk(res);
 }
 static void postDefaults(HTTPRequest* req, HTTPResponse* res){

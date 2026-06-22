@@ -24,6 +24,10 @@ namespace {
   WifiCfg       g_wifi;
   Defaults      g_def;
   WebAuthCfg    g_auth;
+  // Webhook body format, in its OWN NVS key so adding it doesn't resize the WebhookCfg
+  // blob (which would reset a configured webhook on upgrade): 0 = native HostMonitor
+  // schema, 1 = M5Stack /api/alerts/inject schema {slug,key,value,severity}.
+  uint8_t       g_whFmt = 0;
   char          g_buf[24];
   const char*   g_src="runtime";
 }
@@ -52,6 +56,7 @@ void Settings::begin(){
   loadBlob("wifi",    &g_wifi,    sizeof(g_wifi));
   loadBlob("def",     &g_def,     sizeof(g_def));
   loadBlob("auth",    &g_auth,    sizeof(g_auth));
+  loadBlob("whfmt",   &g_whFmt,   sizeof(g_whFmt));   // own key -> no WebhookCfg resize
 }
 
 void Settings::ensureWebPassword(){
@@ -78,10 +83,12 @@ void Settings::save(){
   prefs.putBytes("wifi",    &g_wifi,    sizeof(g_wifi));
   prefs.putBytes("def",     &g_def,     sizeof(g_def));
   prefs.putBytes("auth",    &g_auth,    sizeof(g_auth));
+  prefs.putBytes("whfmt",   &g_whFmt,   sizeof(g_whFmt));
   Display::unlock();
 }
 
 WebhookCfg& Settings::webhook(){ return g_webhook; }
+uint8_t&    Settings::webhookFormat(){ return g_whFmt; }   // 0=native, 1=m5inject
 WifiCfg&    Settings::wifi(){ return g_wifi; }
 WebAuthCfg& Settings::auth(){ return g_auth; }
 Defaults&   Settings::defaults(){ return g_def; }

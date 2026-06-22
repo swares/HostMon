@@ -11,7 +11,7 @@ lives on the flash filesystem (LittleFS) and the dashboard assets are compiled i
 firmware. This is an **Arduino IDE** project (a flat sketch — Arduino builds every
 `.ino/.cpp/.h` in the folder).
 
-Firmware version: **1.4.20**.
+Firmware version: **1.4.21**.
 
 ---
 
@@ -267,6 +267,18 @@ the LVGL display loop on core 1. The **Alerts / Setup** card shows load metrics 
 escaped). Each fired alert is also recorded in the on-device ring buffer for the
 dashboard + LCD.
 
+**Payload format** (Settings → Webhook → *Payload format*): pick **Native** or
+**M5Stack inject** per webhook.
+
+- *Native* (default):
+  `{"event":"host.down","host":…,"address":…,"status":"DOWN","check":…,"message":…,"fails":3,"since":…,"device":…}`
+- *M5Stack inject*: the schema the **M5Stack Device Framework**'s `POST /api/alerts/inject`
+  endpoint expects — `{"slug":"<device>","key":"<host>","value":<fails>,"severity":"critical|warn|info"}`.
+  Point the webhook at `https://<m5-ip>/api/alerts/inject`, put the M5Stack's `X-API-Key:
+  <key>` in the **Custom header** field, and HostMonitor alerts flow straight into that
+  device's alert engine (LCD/MQTT/SD/buzzer/etc.) with no relay. The format is stored in its
+  own NVS key, so switching it never disturbs your saved webhook URL/routing.
+
 > **Email/SMTP was removed.** ESP Mail Client's TLS session needed more internal RAM than
 > this board can spare (it was the heaviest TLS user — see §16). If you want email, point a
 > webhook at a downstream relay that emails for you (ntfy, Home Assistant, a webhook→email
@@ -313,7 +325,7 @@ POST /api/host/clear            {id}
 POST /api/host/interval         {id, key, every}
 POST /api/host                  {id?, name, addr, group, checks[{key,enabled,every,port,secure}], alerts{}}
 POST /api/host/delete           {id}
-POST /api/settings/webhook      {url,method,header,enabled,when[]}
+POST /api/settings/webhook      {url,method,header,enabled,when[],format}   (format: native|m5inject)
 POST /api/settings/defaults     {interval[6],fails,lcdHome,renotify,renotifyEvery}
 POST /api/settings/auth         {user, pass}                (pass 8-39 chars)
 POST /api/test/webhook          {}
