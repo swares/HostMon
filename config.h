@@ -8,7 +8,7 @@
 
 // ---- Identity -------------------------------------------------------------
 #define DEVICE_NAME        "hostmon-01"
-#define FIRMWARE_VERSION   "1.4.21"
+#define FIRMWARE_VERSION   "1.4.22"
 #define MDNS_HOSTNAME      "monitor"          // -> http://monitor.local
 #define AP_SSID            "HostMon"          // first-run captive AP
 #define AP_IP_OCTETS       192,168,4,1

@@ -11,7 +11,7 @@ lives on the flash filesystem (LittleFS) and the dashboard assets are compiled i
 firmware. This is an **Arduino IDE** project (a flat sketch — Arduino builds every
 `.ino/.cpp/.h` in the folder).
 
-Firmware version: **1.4.21**.
+Firmware version: **1.4.22**.
 
 ---
 
